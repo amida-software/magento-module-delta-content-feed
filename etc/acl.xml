@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<acl xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:noNamespaceSchemaLocation="urn:magento:framework:Acl/etc/acl.xsd">
+    <resources>
+        <resource id="Magento_Backend::admin">
+            <resource id="Magento_Backend::stores">
+                <resource id="Magento_Backend::stores_settings">
+                    <resource id="Magento_Config::config">
+                        <resource id="Amida_ProductDeltaFeed::config" title="Amida Product Delta Feed" sortOrder="950"/>
+                    </resource>
+                </resource>
+            </resource>
+        </resource>
+    </resources>
+</acl>

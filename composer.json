@@ -1,0 +1,31 @@
+{
+  "name": "amida/module-product-delta-feed",
+  "description": "Public protobuf+zstd delta feed for Magento 2 product catalog changes.",
+  "type": "magento2-module",
+  "version": "1.0.0",
+  "license": [
+    "proprietary"
+  ],
+  "require": {
+    "php": "^8.1",
+    "magento/framework": "*",
+    "magento/module-catalog": "*",
+    "magento/module-store": "*",
+    "magento/module-config": "*",
+    "magento/module-cron": "*",
+    "magento/module-catalog-inventory": "*",
+    "magento/module-inventory-api": "*",
+    "magento/module-inventory-sales-api": "*"
+  },
+  "suggest": {
+    "ext-zstd": "Required for zstd-compressed feed responses"
+  },
+  "autoload": {
+    "files": [
+      "registration.php"
+    ],
+    "psr-4": {
+      "Amida\\ProductDeltaFeed\\": ""
+    }
+  }
+}

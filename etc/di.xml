@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <type name="Magento\Catalog\Api\CategoryLinkManagementInterface">
+        <plugin name="amida_productdeltafeed_category_link_management"
+                type="Amida\ProductDeltaFeed\Plugin\CategoryLinkManagementPlugin"/>
+    </type>
+    <type name="Magento\Catalog\Api\CategoryLinkRepositoryInterface">
+        <plugin name="amida_productdeltafeed_category_link_repository"
+                type="Amida\ProductDeltaFeed\Plugin\CategoryLinkRepositoryPlugin"/>
+    </type>
+    <type name="Magento\CatalogInventory\Api\StockRegistryInterface">
+        <plugin name="amida_productdeltafeed_stock_registry"
+                type="Amida\ProductDeltaFeed\Plugin\StockRegistryPlugin"/>
+    </type>
+    <type name="Magento\CatalogInventory\Api\StockItemRepositoryInterface">
+        <plugin name="amida_productdeltafeed_stock_item_repository"
+                type="Amida\ProductDeltaFeed\Plugin\StockItemRepositoryPlugin"/>
+    </type>
+    <type name="Magento\InventoryApi\Api\SourceItemsSaveInterface">
+        <plugin name="amida_productdeltafeed_source_items_save"
+                type="Amida\ProductDeltaFeed\Plugin\SourceItemsSavePlugin"/>
+    </type>
+
+    <type name="Magento\Framework\Console\CommandListInterface">
+        <arguments>
+            <argument name="commands" xsi:type="array">
+                <item name="amida_productdeltafeed_rotate_key" xsi:type="object">Amida\ProductDeltaFeed\Console\Command\RotateKeyCommand</item>
+                <item name="amida_productdeltafeed_process_dirty" xsi:type="object">Amida\ProductDeltaFeed\Console\Command\ProcessDirtyCommand</item>
+                <item name="amida_productdeltafeed_snapshot_rebuild" xsi:type="object">Amida\ProductDeltaFeed\Console\Command\SnapshotRebuildCommand</item>
+            </argument>
+        </arguments>
+    </type>
+</config>

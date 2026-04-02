@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Event/etc/events.xsd">
+    <event name="catalog_product_save_after">
+        <observer name="amida_productdeltafeed_product_save"
+                  instance="Amida\ProductDeltaFeed\Observer\ProductSaveAfterObserver"/>
+    </event>
+    <event name="catalog_product_delete_after_done">
+        <observer name="amida_productdeltafeed_product_delete"
+                  instance="Amida\ProductDeltaFeed\Observer\ProductDeleteAfterObserver"/>
+    </event>
+    <event name="catalog_category_change_products">
+        <observer name="amida_productdeltafeed_category_products_change"
+                  instance="Amida\ProductDeltaFeed\Observer\CategoryChangeProductsObserver"/>
+    </event>
+</config>

@@ -1,0 +1,100 @@
+<?xml version="1.0"?>
+<schema xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Setup/Declaration/Schema/etc/schema.xsd">
+    <table name="amida_product_delta_dirty" resource="default" engine="innodb" comment="Amida Product Delta Dirty Queue">
+        <column xsi:type="bigint" name="dirty_id" unsigned="true" nullable="false" identity="true" comment="Dirty ID"/>
+        <column xsi:type="int" name="entity_id" unsigned="true" nullable="false" identity="false" comment="Product Entity ID"/>
+        <column xsi:type="varchar" name="sku" nullable="true" length="64" comment="SKU hint"/>
+        <column xsi:type="smallint" name="store_id" unsigned="true" nullable="false" default="0" comment="Trigger store ID"/>
+        <column xsi:type="int" name="reason_flags" unsigned="true" nullable="false" default="0" comment="Change reason flags"/>
+        <column xsi:type="smallint" name="attempts" unsigned="true" nullable="false" default="0" comment="Attempts"/>
+        <column xsi:type="text" name="last_error" nullable="true" comment="Last processing error"/>
+        <column xsi:type="timestamp" name="created_at" nullable="false" default="CURRENT_TIMESTAMP" on_update="false" comment="Created At"/>
+        <column xsi:type="timestamp" name="updated_at" nullable="false" default="CURRENT_TIMESTAMP" on_update="true" comment="Updated At"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="dirty_id"/>
+        </constraint>
+        <index referenceId="AMIDA_PRODUCT_DELTA_DIRTY_ENTITY_STORE" indexType="btree">
+            <column name="entity_id"/>
+            <column name="store_id"/>
+        </index>
+        <index referenceId="AMIDA_PRODUCT_DELTA_DIRTY_CREATED_AT" indexType="btree">
+            <column name="created_at"/>
+        </index>
+    </table>
+
+    <table name="amida_product_delta_event" resource="default" engine="innodb" comment="Amida Product Delta Change Log">
+        <column xsi:type="bigint" name="event_id" unsigned="true" nullable="false" identity="true" comment="Event ID"/>
+        <column xsi:type="varchar" name="stream_code" nullable="false" length="32" comment="Delivery stream"/>
+        <column xsi:type="varchar" name="origin_stream" nullable="false" length="32" comment="Origin stream"/>
+        <column xsi:type="int" name="entity_id" unsigned="true" nullable="false" identity="false" comment="Product Entity ID"/>
+        <column xsi:type="varchar" name="sku" nullable="false" length="64" comment="SKU"/>
+        <column xsi:type="varchar" name="store_code" nullable="false" length="32" comment="Store code"/>
+        <column xsi:type="varchar" name="event_type" nullable="false" length="32" comment="Event type"/>
+        <column xsi:type="smallint" name="schema_version" unsigned="true" nullable="false" default="1" comment="Schema version"/>
+        <column xsi:type="smallint" name="payload_version" unsigned="true" nullable="false" default="1" comment="Payload version"/>
+        <column xsi:type="text" name="changed_fields_json" nullable="false" comment="Changed fields JSON"/>
+        <column xsi:type="mediumtext" name="payload_json" nullable="false" comment="Canonical payload JSON"/>
+        <column xsi:type="varchar" name="payload_hash" nullable="false" length="64" comment="SHA-256 payload hash"/>
+        <column xsi:type="datetime" name="source_updated_at" nullable="true" comment="Source updated_at"/>
+        <column xsi:type="timestamp" name="created_at" nullable="false" default="CURRENT_TIMESTAMP" on_update="false" comment="Created At"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="event_id"/>
+        </constraint>
+        <index referenceId="AMIDA_PRODUCT_DELTA_EVENT_STREAM_STORE_EVENT" indexType="btree">
+            <column name="stream_code"/>
+            <column name="store_code"/>
+            <column name="event_id"/>
+        </index>
+        <index referenceId="AMIDA_PRODUCT_DELTA_EVENT_ENTITY_STORE" indexType="btree">
+            <column name="entity_id"/>
+            <column name="store_code"/>
+        </index>
+        <index referenceId="AMIDA_PRODUCT_DELTA_EVENT_CREATED_AT" indexType="btree">
+            <column name="created_at"/>
+        </index>
+    </table>
+
+    <table name="amida_product_delta_state" resource="default" engine="innodb" comment="Amida Product Delta State Snapshot">
+        <column xsi:type="bigint" name="state_id" unsigned="true" nullable="false" identity="true" comment="State ID"/>
+        <column xsi:type="int" name="entity_id" unsigned="true" nullable="false" identity="false" comment="Product Entity ID"/>
+        <column xsi:type="varchar" name="sku" nullable="false" length="64" comment="SKU"/>
+        <column xsi:type="varchar" name="store_code" nullable="false" length="32" comment="Store code"/>
+        <column xsi:type="varchar" name="stream_code" nullable="false" length="32" comment="Stream code"/>
+        <column xsi:type="smallint" name="is_enabled" unsigned="true" nullable="false" default="1" comment="Current enabled flag"/>
+        <column xsi:type="varchar" name="state_hash" nullable="false" length="64" comment="SHA-256 canonical state hash"/>
+        <column xsi:type="mediumtext" name="state_json" nullable="false" comment="Canonical state JSON"/>
+        <column xsi:type="timestamp" name="updated_at" nullable="false" default="CURRENT_TIMESTAMP" on_update="true" comment="Updated At"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="state_id"/>
+        </constraint>
+        <constraint xsi:type="unique" referenceId="AMIDA_PRODUCT_DELTA_STATE_PRODUCT_STORE_STREAM_UNQ">
+            <column name="entity_id"/>
+            <column name="store_code"/>
+            <column name="stream_code"/>
+        </constraint>
+        <index referenceId="AMIDA_PRODUCT_DELTA_STATE_STREAM_STORE_STATE" indexType="btree">
+            <column name="stream_code"/>
+            <column name="store_code"/>
+            <column name="state_id"/>
+        </index>
+    </table>
+
+    <table name="amida_product_delta_dead_letter" resource="default" engine="innodb" comment="Amida Product Delta Dead Letter">
+        <column xsi:type="bigint" name="dead_letter_id" unsigned="true" nullable="false" identity="true" comment="Dead Letter ID"/>
+        <column xsi:type="bigint" name="event_id" unsigned="true" nullable="true" comment="Related event ID"/>
+        <column xsi:type="int" name="entity_id" unsigned="true" nullable="true" comment="Product Entity ID"/>
+        <column xsi:type="varchar" name="sku" nullable="true" length="64" comment="SKU"/>
+        <column xsi:type="varchar" name="stream_code" nullable="true" length="32" comment="Stream code"/>
+        <column xsi:type="varchar" name="store_code" nullable="true" length="32" comment="Store code"/>
+        <column xsi:type="varchar" name="reason_code" nullable="false" length="64" comment="Reason code"/>
+        <column xsi:type="mediumtext" name="details_json" nullable="true" comment="Details JSON"/>
+        <column xsi:type="timestamp" name="created_at" nullable="false" default="CURRENT_TIMESTAMP" on_update="false" comment="Created At"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="dead_letter_id"/>
+        </constraint>
+        <index referenceId="AMIDA_PRODUCT_DELTA_DEAD_LETTER_CREATED_AT" indexType="btree">
+            <column name="created_at"/>
+        </index>
+    </table>
+</schema>

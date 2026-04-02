@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Cron:etc/crontab.xsd">
+    <group id="default">
+        <job name="amida_productdeltafeed_process_dirty"
+             instance="Amida\ProductDeltaFeed\Model\Cron\ProcessDirtyQueue"
+             method="execute">
+            <schedule>* * * * *</schedule>
+        </job>
+        <job name="amida_productdeltafeed_reconcile"
+             instance="Amida\ProductDeltaFeed\Model\Cron\ReconcileState"
+             method="execute">
+            <schedule>*/10 * * * *</schedule>
+        </job>
+        <job name="amida_productdeltafeed_cleanup"
+             instance="Amida\ProductDeltaFeed\Model\Cron\Cleanup"
+             method="execute">
+            <schedule>15 2 * * *</schedule>
+        </job>
+    </group>
+</config>

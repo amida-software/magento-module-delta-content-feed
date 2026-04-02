@@ -1,0 +1,51 @@
+<?php
+declare(strict_types=1);
+
+namespace Amida\ProductDeltaFeed\Test\Unit\Model\State;
+
+use Amida\ProductDeltaFeed\Model\State\JsonCanonicalizer;
+use Amida\ProductDeltaFeed\Model\State\StateDiffer;
+use PHPUnit\Framework\TestCase;
+
+class StateDifferTest extends TestCase
+{
+    public function testDetectsChangedContentAttributeCodes(): void
+    {
+        $differ = new StateDiffer(new JsonCanonicalizer());
+        $previous = [
+            'attributes' => [
+                ['code' => 'name', 'kind' => 'string', 'is_null' => false, 'string_value' => 'Old'],
+                ['code' => 'material', 'kind' => 'string', 'is_null' => false, 'string_value' => 'Cotton'],
+            ],
+        ];
+        $current = [
+            'attributes' => [
+                ['code' => 'name', 'kind' => 'string', 'is_null' => false, 'string_value' => 'New'],
+                ['code' => 'material', 'kind' => 'string', 'is_null' => false, 'string_value' => 'Cotton'],
+            ],
+        ];
+
+        self::assertSame(['name'], $differ->changedFields($previous, $current, 'content'));
+    }
+
+    public function testDetectsCategoryChanges(): void
+    {
+        $differ = new StateDiffer(new JsonCanonicalizer());
+        $previous = [
+            'category' => [
+                'categories' => [
+                    ['category_id' => 10, 'position' => 1],
+                ],
+            ],
+        ];
+        $current = [
+            'category' => [
+                'categories' => [
+                    ['category_id' => 12, 'position' => 1],
+                ],
+            ],
+        ];
+
+        self::assertSame(['category_ids', 'category_positions'], $differ->changedFields($previous, $current, 'category'));
+    }
+}

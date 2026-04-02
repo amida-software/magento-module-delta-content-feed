@@ -1,0 +1,166 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
+    <system>
+        <section id="amida_productdeltafeed" translate="label" type="text" sortOrder="950"
+                 showInDefault="1" showInWebsite="1" showInStore="0">
+            <label>Amida Product Delta Feed</label>
+            <tab>catalog</tab>
+            <resource>Amida_ProductDeltaFeed::config</resource>
+
+            <group id="general" translate="label" type="text" sortOrder="10"
+                   showInDefault="1" showInWebsite="1" showInStore="0">
+                <label>General</label>
+                <field id="enabled" translate="label comment" type="select" sortOrder="10"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enable module</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="route_enabled" translate="label comment" type="select" sortOrder="20"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enable public route</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="api_request_monopoly_enabled" translate="label comment" type="select" sortOrder="30"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Monopoly request mode</label>
+                    <comment>Enabled by default. While one snapshot/changes API request is running, the next ones wait for the configured timeout and are dropped with 429 if the lock is not acquired.</comment>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="api_request_timeout_seconds" translate="label comment" type="text" sortOrder="35"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Monopoly request timeout, seconds</label>
+                    <comment>Maximum wait time before a concurrent snapshot/changes request is dropped.</comment>
+                </field>
+                <field id="public_key" translate="label comment" type="text" sortOrder="40"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Public feed key</label>
+                    <comment>Leave empty and save to auto-generate a random key. This is an isolation key, not a private API credential.</comment>
+                    <backend_model>Amida\ProductDeltaFeed\Model\Config\Backend\GeneratePublicKey</backend_model>
+                </field>
+                <field id="zstd_enabled" translate="label comment" type="select" sortOrder="50"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enable zstd compression</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="zstd_level" translate="label comment" type="text" sortOrder="60"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Zstd compression level</label>
+                </field>
+                <field id="max_batch_size_bytes" translate="label comment" type="text" sortOrder="70"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Max batch size, bytes</label>
+                </field>
+                <field id="hard_single_item_limit_bytes" translate="label comment" type="text" sortOrder="80"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Hard single item limit, bytes</label>
+                </field>
+                <field id="candidate_limit" translate="label comment" type="text" sortOrder="90"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Candidate rows per read</label>
+                </field>
+                <field id="dirty_batch_size" translate="label comment" type="text" sortOrder="100"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Dirty queue batch size</label>
+                </field>
+                <field id="reconcile_batch_size" translate="label comment" type="text" sortOrder="110"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Reconcile batch size</label>
+                </field>
+                <field id="repair_scan_batch_size" translate="label comment" type="text" sortOrder="120"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Repair scan batch size</label>
+                </field>
+                <field id="retention_days" translate="label comment" type="text" sortOrder="130"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Retention days</label>
+                </field>
+            </group>
+
+            <group id="stores" translate="label" type="text" sortOrder="20"
+                   showInDefault="1" showInWebsite="1" showInStore="0">
+                <label>Stores</label>
+                <field id="codes" translate="label comment" type="multiselect" sortOrder="10"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Store views to export</label>
+                    <source_model>Magento\Config\Model\Config\Source\Store</source_model>
+                    <can_be_empty>1</can_be_empty>
+                    <comment>Leave empty to export all active storefront store views.</comment>
+                </field>
+            </group>
+
+            <group id="streams" translate="label" type="text" sortOrder="30"
+                   showInDefault="1" showInWebsite="1" showInStore="0">
+                <label>Streams</label>
+                <field id="content_enabled" translate="label" type="select" sortOrder="10"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enable content stream</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="seo_enabled" translate="label" type="select" sortOrder="20"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enable SEO stream</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="price_enabled" translate="label" type="select" sortOrder="30"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enable price stream</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="availability_enabled" translate="label" type="select" sortOrder="40"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enable availability stream</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="category_enabled" translate="label" type="select" sortOrder="50"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enable category stream</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="all_enabled" translate="label" type="select" sortOrder="60"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enable unified all stream</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+            </group>
+
+            <group id="content" translate="label" type="text" sortOrder="40"
+                   showInDefault="1" showInWebsite="1" showInStore="0">
+                <label>Content attributes</label>
+                <field id="include_attributes" translate="label comment" type="multiselect" sortOrder="10"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Explicit include list</label>
+                    <source_model>Amida\ProductDeltaFeed\Model\Config\Source\ProductAttributes</source_model>
+                    <can_be_empty>1</can_be_empty>
+                    <comment>If empty, all product attributes are exported except excluded/reserved ones.</comment>
+                </field>
+                <field id="exclude_attributes" translate="label comment" type="multiselect" sortOrder="20"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Exclude list</label>
+                    <source_model>Amida\ProductDeltaFeed\Model\Config\Source\ProductAttributes</source_model>
+                    <can_be_empty>1</can_be_empty>
+                </field>
+            </group>
+
+            <group id="runtime" translate="label" type="text" sortOrder="50"
+                   showInDefault="1" showInWebsite="1" showInStore="0">
+                <label>Runtime rules</label>
+                <field id="suppress_while_disabled" translate="label" type="select" sortOrder="10"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Suppress ordinary deltas while product is disabled</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="reemit_full_on_enable" translate="label" type="select" sortOrder="20"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Re-emit full state when product is enabled again</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="export_deleted_as_tombstone" translate="label" type="select" sortOrder="30"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Export deleted products as tombstones</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+            </group>
+        </section>
+    </system>
+</config>
