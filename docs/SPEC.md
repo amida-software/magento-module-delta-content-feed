@@ -1094,7 +1094,6 @@ Endpoint чтения должен работать из:
 - `PriceProviderInterface`
 - `CategoryProviderInterface`
 - `AttributeValueNormalizerInterface`
-- `CompressorInterface`
 - `SerializerInterface`
 
 ---

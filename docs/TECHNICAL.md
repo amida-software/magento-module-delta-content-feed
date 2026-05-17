@@ -16,7 +16,7 @@ Exception: when the snapshot state cache is completely empty and the client asks
 
 ## Write path
 
-Magento saves, category assignments and stock updates enqueue dirty rows. A cron/CLI processor rebuilds canonical state from live Magento data, diffs it against `amida_product_delta_state` and appends new rows to `amida_product_delta_event`.
+Magento saves, mass attribute updates, category assignments and stock updates enqueue dirty rows. A cron/CLI processor rebuilds canonical state from live Magento data, diffs it against `amida_product_delta_state` and appends new rows to `amida_product_delta_event`.
 
 ## Reliability rules
 
