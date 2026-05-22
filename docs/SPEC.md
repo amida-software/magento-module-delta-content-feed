@@ -18,6 +18,7 @@
    - `price`
    - `availability`
    - `category`
+   - `curated`
    - `all` (объединенный поток)
 3. Позволяет **настраивать, какие характеристики экспортируются**.
 4. Умеет корректно обрабатывать:
@@ -41,6 +42,7 @@
 - Пакетная отдача в `protobuf` + `zstd`.
 - Настройка allowlist атрибутов для `content` stream.
 - Отдельные stream-ы для `seo`, `price`, `availability`, `category`.
+- Отдельный `curated` stream: готовый consumer-friendly документ товара с SKU, старой/новой ценой, простым наличием, названием, описанием, абсолютными URL изображений, брендом, типом товара, category IDs, notes и связанными товарами.
 - Надежная обработка `disable -> status only`, `enable -> full replay`.
 - Начальный full snapshot.
 - Ротация уникальных URL-ключей.
@@ -164,6 +166,26 @@ MVP проектируется под классический Magento/Adobe Com
 ### `category`
 Отдельный поток category assignments.
 
+### `curated`
+Отдельный поток готового товарного документа для downstream-consumer-ов.
+
+Он намеренно дублирует выбранные данные из `seo`, `price`, `availability`, `category` и части `content`, чтобы внешней системе не приходилось склеивать низкоуровневые stream-ы для обычной карточки товара.
+
+Минимальный payload:
+
+- `sku`
+- `prices.old`, `prices.new`; `currency_code` не повторяется на уровне товара
+- `availability.is_available`
+- `availability.qty`
+- `name`, `description`, `short_description`
+- `url_key`
+- `images[]` — полные absolute media URL
+- `brand`
+- `product_type`
+- `category_ids[]`
+- `notes[]`
+- `related_products[]`
+
 ### `all`
 Объединенный поток всех событий в единой очередности по `event_id`.
 
@@ -254,6 +276,7 @@ streams:
   price: true
   availability: true
   category: true
+  curated: true
 
 content:
   attribute_mode: auto_all_minus_excluded
@@ -350,6 +373,7 @@ GET /amidafeed/v1/changes/key/<feedKey>/stream/{stream}?after_event_id=<id>&stor
 - `price`
 - `availability`
 - `category`
+- `curated`
 
 ### 2. Начальный snapshot
 
@@ -521,6 +545,7 @@ event_id ASC
   - `price` full
   - `availability` full
   - `category` full
+  - `curated` full
 - даже если часть полей менялась пока товар был выключен.
 
 ## 12.4. Причина
@@ -1127,7 +1152,7 @@ Endpoint чтения должен работать из:
 2. Может быть включен/выключен конфигом.
 3. Отдает `protobuf + zstd`.
 4. Поддерживает `max_batch_size_bytes=2MB` по умолчанию.
-5. Умеет отдельные streams: `content`, `seo`, `price`, `availability`, `category`, `all`.
+5. Умеет отдельные streams: `content`, `seo`, `price`, `availability`, `category`, `curated`, `all`.
 6. Корректно работает логика disabled/enabled.
 7. Category-only изменения не теряются.
 8. Есть snapshot endpoint.

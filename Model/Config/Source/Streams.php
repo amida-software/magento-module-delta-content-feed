@@ -16,6 +16,7 @@ class Streams implements OptionSourceInterface
             ['value' => Config::STREAM_PRICE, 'label' => __('Price')],
             ['value' => Config::STREAM_AVAILABILITY, 'label' => __('Availability')],
             ['value' => Config::STREAM_CATEGORY, 'label' => __('Category')],
+            ['value' => Config::STREAM_CURATED, 'label' => __('Curated product')],
         ];
     }
 }

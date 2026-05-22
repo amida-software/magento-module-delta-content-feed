@@ -13,6 +13,7 @@ use Magento\Store\Model\StoreManagerInterface;
 use Amida\ProductDeltaFeed\Model\AttributeSelector;
 use Amida\ProductDeltaFeed\Model\Config;
 use Amida\ProductDeltaFeed\Model\Inventory\InventoryProvider;
+use Amida\ProductDeltaFeed\Model\State\CuratedProductBuilder;
 
 class ProductStateBuilder
 {
@@ -24,7 +25,8 @@ class ProductStateBuilder
         private readonly InventoryProvider $inventoryProvider,
         private readonly ResourceConnection $resourceConnection,
         private readonly StoreManagerInterface $storeManager,
-        private readonly CurrencyFactory $currencyFactory
+        private readonly CurrencyFactory $currencyFactory,
+        private readonly CuratedProductBuilder $curatedProductBuilder
     ) {
     }
 
@@ -40,6 +42,7 @@ class ProductStateBuilder
         $sku = (string)$product->getSku();
         $enabled = (int)$product->getStatus() === Status::STATUS_ENABLED;
         $sourceUpdatedAt = (string)($product->getUpdatedAt() ?? '');
+        $availability = $this->inventoryProvider->build($sku, $storeCode);
 
         return [
             'meta' => [
@@ -66,7 +69,7 @@ class ProductStateBuilder
             ],
             'availability' => [
                 'enabled' => $enabled,
-                'availability' => $this->inventoryProvider->build($sku, $storeCode),
+                'availability' => $availability,
                 'deleted' => false,
             ],
             'category' => [
@@ -74,6 +77,7 @@ class ProductStateBuilder
                 'category' => $this->buildCategoryState($productId),
                 'deleted' => false,
             ],
+            'curated' => $this->curatedProductBuilder->build($product, $storeCode, $availability),
         ];
     }
 

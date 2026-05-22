@@ -27,6 +27,7 @@
                 <price_enabled>1</price_enabled>
                 <availability_enabled>1</availability_enabled>
                 <category_enabled>1</category_enabled>
+                <curated_enabled>1</curated_enabled>
                 <all_enabled>1</all_enabled>
             </streams>
             <content>

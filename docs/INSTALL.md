@@ -28,13 +28,14 @@ bin/magento setup:di:compile
 2. Save once with empty **Public feed key** to auto-generate a unique key.
 3. Select store views to export, or leave empty to export all active store views.
 4. Keep `max_batch_size_bytes=2097152` unless the receiver explicitly needs another limit.
-5. Optionally run an initial snapshot rebuild (recommended for large catalogs):
+5. Keep **Curated product stream** enabled if the receiver needs a ready-to-import product document instead of joining low-level streams.
+6. Optionally run an initial snapshot rebuild (recommended for large catalogs):
 
 ```bash
 bin/magento amidafeed:snapshot:rebuild
 ```
 
-6. New runtime defaults:
+7. New runtime defaults:
 
 - `Monopoly request mode = Yes`
 - `Monopoly request timeout = 5` seconds

@@ -113,6 +113,9 @@ class FeedEncoder
             $payload .= $this->writer->message(5, $this->encodeAvailabilityState((array)$state['availability']));
         }
         $payload .= $this->writer->bool(6, (bool)($state['deleted'] ?? false));
+        if (!empty($state['curated'])) {
+            $payload .= $this->writer->message(7, $this->encodeCuratedProduct((array)$state['curated']));
+        }
         return $payload;
     }
 
@@ -241,6 +244,101 @@ class FeedEncoder
         if (($state['stock_status'] ?? '') !== '') {
             $payload .= $this->writer->string(6, (string)$state['stock_status']);
         }
+        return $payload;
+    }
+
+    private function encodeCuratedProduct(array $state): string
+    {
+        $payload = '';
+        if (($state['sku'] ?? '') !== '') {
+            $payload .= $this->writer->string(1, (string)$state['sku']);
+        }
+        if (!empty($state['prices'])) {
+            $payload .= $this->writer->message(2, $this->encodeCuratedPrices((array)$state['prices']));
+        }
+        if (!empty($state['availability'])) {
+            $payload .= $this->writer->message(3, $this->encodeCuratedAvailability((array)$state['availability']));
+        }
+        if (($state['name'] ?? '') !== '') {
+            $payload .= $this->writer->string(4, (string)$state['name']);
+        }
+        if (($state['description'] ?? '') !== '') {
+            $payload .= $this->writer->string(5, (string)$state['description']);
+        }
+        if (($state['short_description'] ?? '') !== '') {
+            $payload .= $this->writer->string(6, (string)$state['short_description']);
+        }
+        if (($state['url_key'] ?? '') !== '') {
+            $payload .= $this->writer->string(7, (string)$state['url_key']);
+        }
+        foreach ((array)($state['images'] ?? []) as $imageUrl) {
+            $payload .= $this->writer->string(8, (string)$imageUrl);
+        }
+        if (($state['brand'] ?? '') !== '') {
+            $payload .= $this->writer->string(9, (string)$state['brand']);
+        }
+        if (($state['product_type'] ?? '') !== '') {
+            $payload .= $this->writer->string(10, (string)$state['product_type']);
+        }
+        if (($state['magento_type_id'] ?? '') !== '') {
+            $payload .= $this->writer->string(11, (string)$state['magento_type_id']);
+        }
+        foreach ((array)($state['category_ids'] ?? []) as $categoryId) {
+            $payload .= $this->writer->uint64(12, (int)$categoryId);
+        }
+        foreach ((array)($state['notes'] ?? []) as $note) {
+            $payload .= $this->writer->string(13, (string)$note);
+        }
+        foreach ((array)($state['related_products'] ?? []) as $relatedProduct) {
+            $payload .= $this->writer->message(14, $this->encodeRelatedProduct((array)$relatedProduct));
+        }
+
+        return $payload;
+    }
+
+    private function encodeCuratedPrices(array $prices): string
+    {
+        $payload = '';
+        if (array_key_exists('old', $prices) && $prices['old'] !== null) {
+            $payload .= $this->writer->double(1, (float)$prices['old']);
+        }
+        if (array_key_exists('new', $prices) && $prices['new'] !== null) {
+            $payload .= $this->writer->double(2, (float)$prices['new']);
+        }
+
+        return $payload;
+    }
+
+    private function encodeCuratedAvailability(array $availability): string
+    {
+        $payload = '';
+        if (isset($availability['is_available'])) {
+            $payload .= $this->writer->bool(1, (bool)$availability['is_available']);
+        }
+        if (isset($availability['qty'])) {
+            $payload .= $this->writer->double(2, (float)$availability['qty']);
+        }
+
+        return $payload;
+    }
+
+    private function encodeRelatedProduct(array $relatedProduct): string
+    {
+        $payload = '';
+        if (($relatedProduct['relation'] ?? '') !== '') {
+            $payload .= $this->writer->string(1, (string)$relatedProduct['relation']);
+        }
+        $payload .= $this->writer->uint64(2, (int)($relatedProduct['product_id'] ?? 0));
+        if (($relatedProduct['sku'] ?? '') !== '') {
+            $payload .= $this->writer->string(3, (string)$relatedProduct['sku']);
+        }
+        if (($relatedProduct['type_id'] ?? '') !== '') {
+            $payload .= $this->writer->string(4, (string)$relatedProduct['type_id']);
+        }
+        if (isset($relatedProduct['position'])) {
+            $payload .= $this->writer->sint32(5, (int)$relatedProduct['position']);
+        }
+
         return $payload;
     }
 

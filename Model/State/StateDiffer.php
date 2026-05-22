@@ -28,6 +28,7 @@ class StateDiffer
             'price' => $this->diffAssocByPrefix($previous['price'] ?? [], $current['price'] ?? [], 'price.'),
             'availability' => $this->diffAssocByPrefix($previous['availability'] ?? [], $current['availability'] ?? [], 'availability.'),
             'category' => $this->diffCategory($previous['category'] ?? [], $current['category'] ?? []),
+            'curated' => $this->diffAssocByPrefix($previous['curated'] ?? [], $current['curated'] ?? [], 'curated.'),
             default => $this->diffAssocByPrefix($previous, $current, ''),
         };
     }
@@ -42,6 +43,7 @@ class StateDiffer
             'price' => array_map(static fn (string $key): string => 'price.' . $key, array_keys((array)($current['price'] ?? []))),
             'availability' => array_map(static fn (string $key): string => 'availability.' . $key, array_keys((array)($current['availability'] ?? []))),
             'category' => ['category_ids', 'category_positions'],
+            'curated' => array_map(static fn (string $key): string => 'curated.' . $key, array_keys((array)($current['curated'] ?? []))),
             default => array_keys($current),
         };
     }

@@ -10,6 +10,8 @@ use Amida\ProductDeltaFeed\Model\ResourceModel\StateSnapshot;
 
 class SnapshotRebuilder
 {
+    private const PRODUCT_STREAMS = ['content', 'seo', 'price', 'availability', 'category', 'curated'];
+
     public function __construct(
         private readonly Config $config,
         private readonly ProductStateBuilder $stateBuilder,
@@ -35,13 +37,13 @@ class SnapshotRebuilder
                 if ($states === null) {
                     continue;
                 }
-                foreach (['content', 'seo', 'price', 'availability', 'category'] as $stream) {
+                foreach (self::PRODUCT_STREAMS as $stream) {
                     if (!$this->config->isStreamEnabled($stream)) {
                         continue;
                     }
                     $payload = (bool)$states['meta']['enabled']
                         ? $states[$stream]
-                        : ['enabled' => false, 'attributes' => [], 'deleted' => false];
+                        : $this->emptyPayload($stream);
                     $rows[] = [
                         'entity_id' => $productId,
                         'sku' => (string)$states['meta']['sku'],
@@ -63,5 +65,24 @@ class SnapshotRebuilder
         }
 
         return count($productIds);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptyPayload(string $stream): array
+    {
+        $payload = [
+            'enabled' => false,
+            'deleted' => false,
+        ];
+
+        if ($stream === 'curated') {
+            $payload['curated'] = [];
+        } else {
+            $payload['attributes'] = [];
+        }
+
+        return $payload;
     }
 }

@@ -60,6 +60,7 @@ message ProductState {
   PriceState price = 4;
   AvailabilityState availability = 5;
   bool deleted = 6;
+  CuratedProductState curated = 7;
 }
 
 message AttributeValue {
@@ -113,6 +114,41 @@ message AvailabilityState {
   bool manage_stock = 4;
   int32 backorders = 5;
   string stock_status = 6;
+}
+
+message CuratedProductState {
+  string sku = 1;
+  CuratedPriceState prices = 2;
+  CuratedAvailabilityState availability = 3;
+  string name = 4;
+  string description = 5;
+  string short_description = 6;
+  string url_key = 7;
+  repeated string images = 8;
+  string brand = 9;
+  string product_type = 10;
+  string magento_type_id = 11;
+  repeated uint64 category_ids = 12;
+  repeated string notes = 13;
+  repeated RelatedProduct related_products = 14;
+}
+
+message CuratedPriceState {
+  double old_price = 1;
+  double new_price = 2;
+}
+
+message CuratedAvailabilityState {
+  bool is_available = 1;
+  double qty = 2;
+}
+
+message RelatedProduct {
+  string relation = 1;
+  uint64 product_id = 2;
+  string sku = 3;
+  string type_id = 4;
+  sint32 position = 5;
 }
 
 message Diagnostic {
