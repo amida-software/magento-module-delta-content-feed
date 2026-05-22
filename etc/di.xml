@@ -9,6 +9,10 @@
         <plugin name="amida_productdeltafeed_category_link_repository"
                 type="Amida\ProductDeltaFeed\Plugin\CategoryLinkRepositoryPlugin"/>
     </type>
+    <type name="Magento\Catalog\Model\Product\Action">
+        <plugin name="amida_productdeltafeed_product_action"
+                type="Amida\ProductDeltaFeed\Plugin\ProductActionPlugin"/>
+    </type>
     <type name="Magento\CatalogInventory\Api\StockRegistryInterface">
         <plugin name="amida_productdeltafeed_stock_registry"
                 type="Amida\ProductDeltaFeed\Plugin\StockRegistryPlugin"/>

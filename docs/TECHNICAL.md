@@ -16,7 +16,7 @@ Exception: when the snapshot state cache is completely empty and the client asks
 
 ## Write path
 
-Magento saves, category assignments and stock updates enqueue dirty rows. A cron/CLI processor rebuilds canonical state from live Magento data, diffs it against `amida_product_delta_state` and appends new rows to `amida_product_delta_event`.
+Magento saves, mass attribute updates, category assignments and stock updates enqueue dirty rows. A cron/CLI processor rebuilds canonical state from live Magento data, diffs it against `amida_product_delta_state` and appends new rows to `amida_product_delta_event`.
 
 ## Reliability rules
 
@@ -42,7 +42,23 @@ Magento saves, category assignments and stock updates enqueue dirty rows. A cron
 - `price`: catalog price fields.
 - `availability`: stock/salability state.
 - `category`: full current category assignments plus `added_category_ids` / `removed_category_ids`.
+- `curated`: full consumer-friendly product document. It intentionally duplicates selected data from the lower-level streams so downstream importers do not have to join `seo + price + availability + category + content` just to build a storefront product card.
 - `all`: duplicates individual events in one ordered stream and preserves `origin_stream`.
+
+### Curated product payload
+
+`curated` is emitted as a complete product document whenever any relevant product area changes. The payload always contains:
+
+- `sku`
+- `prices.old` and `prices.new` (currency is intentionally not repeated per product)
+- `availability.is_available` and `availability.qty`
+- `name`, `description`, `short_description`, `url_key`
+- `images[]` as absolute media URLs
+- `brand`
+- `product_type` and `magento_type_id`
+- `category_ids[]`; category dictionaries are intentionally fetched separately by consumers when an unknown ID appears
+- `notes[]`
+- `related_products[]` for Magento linked products such as related/up-sell/cross-sell
 
 ## Tests
 

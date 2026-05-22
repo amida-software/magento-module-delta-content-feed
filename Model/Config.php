@@ -14,6 +14,7 @@ class Config
     public const STREAM_PRICE = 'price';
     public const STREAM_AVAILABILITY = 'availability';
     public const STREAM_CATEGORY = 'category';
+    public const STREAM_CURATED = 'curated';
     public const STREAM_ALL = 'all';
 
     public const XML_PATH_ENABLED = 'amida_productdeltafeed/general/enabled';
@@ -45,6 +46,7 @@ class Config
         self::STREAM_PRICE => 'amida_productdeltafeed/streams/price_enabled',
         self::STREAM_AVAILABILITY => 'amida_productdeltafeed/streams/availability_enabled',
         self::STREAM_CATEGORY => 'amida_productdeltafeed/streams/category_enabled',
+        self::STREAM_CURATED => 'amida_productdeltafeed/streams/curated_enabled',
         self::STREAM_ALL => 'amida_productdeltafeed/streams/all_enabled',
     ];
 

@@ -16,6 +16,8 @@ use Amida\ProductDeltaFeed\Model\StoreScopeResolver;
 
 class ChangeProcessor
 {
+    private const PRODUCT_STREAMS = ['content', 'seo', 'price', 'availability', 'category', 'curated'];
+
     public function __construct(
         private readonly Config $config,
         private readonly DirtyQueue $dirtyQueue,
@@ -92,12 +94,12 @@ class ChangeProcessor
                 if ($previousStates === []) {
                     continue;
                 }
-                foreach (['content', 'seo', 'price', 'availability', 'category'] as $stream) {
+                foreach (self::PRODUCT_STREAMS as $stream) {
                     if (!$this->config->isStreamEnabled($stream)) {
                         continue;
                     }
                     $sku = $skuHint !== '' ? $skuHint : (string)($previousStates[$stream]['sku'] ?? '');
-                    $payload = ['enabled' => false, 'deleted' => true, 'attributes' => []];
+                    $payload = $this->emptyPayload($stream, true);
                     $this->appendEvent($eventRows, $stream, $stream, $productId, $sku, $storeCode, 'TOMBSTONE', ['deleted'], $payload, null);
                 }
             }
@@ -114,12 +116,12 @@ class ChangeProcessor
 
             if ($currentStates === null) {
                 if ($this->config->exportDeletedAsTombstone() && $previousStates !== []) {
-                    foreach (['content', 'seo', 'price', 'availability', 'category'] as $stream) {
+                    foreach (self::PRODUCT_STREAMS as $stream) {
                         if (!$this->config->isStreamEnabled($stream)) {
                             continue;
                         }
                         $sku = $skuHint !== '' ? $skuHint : (string)($previousStates[$stream]['sku'] ?? '');
-                        $payload = ['enabled' => false, 'deleted' => true, 'attributes' => []];
+                        $payload = $this->emptyPayload($stream, true);
                         $this->appendEvent($eventRows, $stream, $stream, $productId, $sku, $storeCode, 'TOMBSTONE', ['deleted'], $payload, null);
                     }
                     $this->stateSnapshot->deleteProduct($productId);
@@ -133,11 +135,11 @@ class ChangeProcessor
             $action = $this->lifecycleResolver->resolve($hasPrevious, $previousEnabled, $currentEnabled);
 
             if ($action === LifecycleResolver::ACTION_DISABLE) {
-                foreach (['content', 'seo', 'price', 'availability', 'category'] as $stream) {
+                foreach (self::PRODUCT_STREAMS as $stream) {
                     if (!$this->config->isStreamEnabled($stream)) {
                         continue;
                     }
-                    $payload = ['enabled' => false, 'deleted' => false, 'attributes' => []];
+                    $payload = $this->emptyPayload($stream, false);
                     $this->appendEvent(
                         $eventRows,
                         $stream,
@@ -156,11 +158,11 @@ class ChangeProcessor
             }
 
             if ($action === LifecycleResolver::ACTION_SUPPRESSED_DISABLED && $this->config->suppressWhileDisabled()) {
-                foreach (['content', 'seo', 'price', 'availability', 'category'] as $stream) {
+                foreach (self::PRODUCT_STREAMS as $stream) {
                     if (!$this->config->isStreamEnabled($stream)) {
                         continue;
                     }
-                    $payload = ['enabled' => false, 'deleted' => false, 'attributes' => []];
+                    $payload = $this->emptyPayload($stream, false);
                     $snapshotRows[] = $this->snapshotRow($productId, (string)$currentStates['meta']['sku'], $storeCode, $stream, false, $payload);
                 }
                 continue;
@@ -168,7 +170,7 @@ class ChangeProcessor
 
             $forceFull = $action === LifecycleResolver::ACTION_FULL || (($reasonFlags & ReasonFlags::FORCE_FULL) === ReasonFlags::FORCE_FULL);
 
-            foreach (['content', 'seo', 'price', 'availability', 'category'] as $stream) {
+            foreach (self::PRODUCT_STREAMS as $stream) {
                 if (!$this->config->isStreamEnabled($stream)) {
                     continue;
                 }
@@ -228,8 +230,28 @@ class ChangeProcessor
             'price' => (bool)($reasonFlags & (ReasonFlags::PRICE | ReasonFlags::FORCE_COMPARE | ReasonFlags::FORCE_FULL | ReasonFlags::STATUS)),
             'availability' => (bool)($reasonFlags & (ReasonFlags::AVAILABILITY | ReasonFlags::FORCE_COMPARE | ReasonFlags::FORCE_FULL | ReasonFlags::STATUS)),
             'category' => (bool)($reasonFlags & (ReasonFlags::CATEGORY | ReasonFlags::FORCE_COMPARE | ReasonFlags::FORCE_FULL | ReasonFlags::STATUS)),
+            'curated' => (bool)($reasonFlags & (ReasonFlags::CONTENT | ReasonFlags::SEO | ReasonFlags::PRICE | ReasonFlags::AVAILABILITY | ReasonFlags::CATEGORY | ReasonFlags::STATUS | ReasonFlags::FORCE_COMPARE | ReasonFlags::FORCE_FULL)),
             default => false,
         };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptyPayload(string $stream, bool $deleted): array
+    {
+        $payload = [
+            'enabled' => false,
+            'deleted' => $deleted,
+        ];
+
+        if ($stream === 'curated') {
+            $payload['curated'] = [];
+        } else {
+            $payload['attributes'] = [];
+        }
+
+        return $payload;
     }
 
     private function extractPreviousEnabled(array $previousStates): bool

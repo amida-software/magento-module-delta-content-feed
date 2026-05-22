@@ -117,7 +117,13 @@
                     <label>Enable category stream</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                 </field>
-                <field id="all_enabled" translate="label" type="select" sortOrder="60"
+                <field id="curated_enabled" translate="label comment" type="select" sortOrder="60"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enable curated product stream</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Consumer-friendly full product document with sku, prices, simple availability, name, description, image URLs, brand, product type, category IDs, notes and related products.</comment>
+                </field>
+                <field id="all_enabled" translate="label" type="select" sortOrder="70"
                        showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Enable unified all stream</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
