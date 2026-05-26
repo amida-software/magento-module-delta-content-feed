@@ -3,7 +3,7 @@
         xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
     <system>
         <section id="amida_productdeltafeed" translate="label" type="text" sortOrder="950"
-                 showInDefault="1" showInWebsite="1" showInStore="0">
+                 showInDefault="1" showInWebsite="1" showInStore="1">
             <label>Amida Product Delta Feed</label>
             <tab>catalog</tab>
             <resource>Amida_ProductDeltaFeed::config</resource>
@@ -129,6 +129,12 @@
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                     <comment>Category tree dictionary. This is different from the product category assignment stream.</comment>
                 </field>
+                <field id="attributes_enabled" translate="label comment" type="select" sortOrder="68"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enable attributes dictionary stream</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Standalone product attribute dictionary endpoint / stream.</comment>
+                </field>
                 <field id="curated_enabled" translate="label comment" type="select" sortOrder="70"
                        showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Enable curated product stream</label>
@@ -157,6 +163,82 @@
                     <label>Exclude list</label>
                     <source_model>Amida\ProductDeltaFeed\Model\Config\Source\ProductAttributes</source_model>
                     <can_be_empty>1</can_be_empty>
+                </field>
+            </group>
+
+
+            <group id="store_metadata" translate="label" type="text" sortOrder="45"
+                   showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Store Metadata Endpoint</label>
+                <field id="endpoint_enabled" translate="label comment" type="select" sortOrder="10"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Enable store endpoint</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="allow_include_sources" translate="label comment" type="select" sortOrder="20"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Allow include_sources=1</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>When disabled, source_map is not exposed even if requested.</comment>
+                </field>
+                <field id="main_store_code" translate="label comment" type="text" sortOrder="30"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Main store code override</label>
+                </field>
+                <field id="name_override" translate="label comment" type="text" sortOrder="40"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Store name override</label>
+                </field>
+                <field id="description_override" translate="label comment" type="textarea" sortOrder="50"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Store description override</label>
+                    <comment>Plain text or HTML. HTML is stripped before export. Do not put generated/fake data here.</comment>
+                </field>
+                <field id="home_url_override" translate="label comment" type="text" sortOrder="60"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Home URL override</label>
+                </field>
+                <field id="logo_url_override" translate="label comment" type="text" sortOrder="70"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Logo URL override</label>
+                </field>
+                <field id="include_counts_default" translate="label comment" type="select" sortOrder="80"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Include counts by default</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="sitemap_mode" translate="label comment" type="select" sortOrder="90"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Default sitemap mode</label>
+                    <source_model>Amida\ProductDeltaFeed\Model\Config\Source\SitemapMode</source_model>
+                </field>
+                <field id="sitemap_limit" translate="label comment" type="text" sortOrder="100"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Default sitemap limit</label>
+                </field>
+                <field id="contacts_json" translate="label comment" type="textarea" sortOrder="110"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Contacts JSON override</label>
+                    <comment>{"phones":[],"emails":[],"messengers":[]}</comment>
+                </field>
+                <field id="pages_json" translate="label comment" type="textarea" sortOrder="120"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Pages JSON override</label>
+                    <comment>List of page objects with id, title, description, url, special, enabled, sort_order.</comment>
+                </field>
+                <field id="addresses_json" translate="label comment" type="textarea" sortOrder="130"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Addresses JSON override</label>
+                </field>
+                <field id="sitemap_urls_json" translate="label comment" type="textarea" sortOrder="140"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Sitemap URLs JSON override</label>
+                    <comment>{"default":"https://example.com/sitemap.xml"} or {"ua":"https://example.com/ua/sitemap.xml"}</comment>
+                </field>
+                <field id="attribute_metadata_json" translate="label comment" type="textarea" sortOrder="150"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Attribute metadata JSON</label>
+                    <comment>{"volume":{"unit":"ml","semantic_group":"size","facet_priority":10}}</comment>
                 </field>
             </group>
 

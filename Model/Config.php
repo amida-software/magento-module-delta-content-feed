@@ -19,6 +19,24 @@ class Config
     public const STREAM_OFFER = 'offer';
     public const STREAM_ALL = 'all';
 
+    public const STREAM_ATTRIBUTES = 'attributes';
+
+    public const XML_PATH_STORE_ENDPOINT_ENABLED = 'amida_productdeltafeed/store_metadata/endpoint_enabled';
+    public const XML_PATH_STORE_ALLOW_INCLUDE_SOURCES = 'amida_productdeltafeed/store_metadata/allow_include_sources';
+    public const XML_PATH_STORE_MAIN_STORE_CODE = 'amida_productdeltafeed/store_metadata/main_store_code';
+    public const XML_PATH_STORE_NAME_OVERRIDE = 'amida_productdeltafeed/store_metadata/name_override';
+    public const XML_PATH_STORE_DESCRIPTION_OVERRIDE = 'amida_productdeltafeed/store_metadata/description_override';
+    public const XML_PATH_STORE_HOME_URL_OVERRIDE = 'amida_productdeltafeed/store_metadata/home_url_override';
+    public const XML_PATH_STORE_LOGO_URL_OVERRIDE = 'amida_productdeltafeed/store_metadata/logo_url_override';
+    public const XML_PATH_STORE_CONTACTS_JSON = 'amida_productdeltafeed/store_metadata/contacts_json';
+    public const XML_PATH_STORE_PAGES_JSON = 'amida_productdeltafeed/store_metadata/pages_json';
+    public const XML_PATH_STORE_ADDRESSES_JSON = 'amida_productdeltafeed/store_metadata/addresses_json';
+    public const XML_PATH_STORE_SITEMAP_URLS_JSON = 'amida_productdeltafeed/store_metadata/sitemap_urls_json';
+    public const XML_PATH_STORE_ATTRIBUTE_METADATA_JSON = 'amida_productdeltafeed/store_metadata/attribute_metadata_json';
+    public const XML_PATH_STORE_SITEMAP_MODE = 'amida_productdeltafeed/store_metadata/sitemap_mode';
+    public const XML_PATH_STORE_SITEMAP_LIMIT = 'amida_productdeltafeed/store_metadata/sitemap_limit';
+    public const XML_PATH_STORE_INCLUDE_COUNTS_DEFAULT = 'amida_productdeltafeed/store_metadata/include_counts_default';
+
     public const XML_PATH_ENABLED = 'amida_productdeltafeed/general/enabled';
     public const XML_PATH_ROUTE_ENABLED = 'amida_productdeltafeed/general/route_enabled';
     public const XML_PATH_API_REQUEST_MONOPOLY_ENABLED = 'amida_productdeltafeed/general/api_request_monopoly_enabled';
@@ -54,6 +72,7 @@ class Config
         self::STREAM_CATEGORIES => 'amida_productdeltafeed/streams/categories_enabled',
         self::STREAM_CURATED => 'amida_productdeltafeed/streams/curated_enabled',
         self::STREAM_OFFER => 'amida_productdeltafeed/streams/offer_enabled',
+        self::STREAM_ATTRIBUTES => 'amida_productdeltafeed/streams/attributes_enabled',
         self::STREAM_ALL => 'amida_productdeltafeed/streams/all_enabled',
     ];
 
@@ -364,6 +383,44 @@ class Config
         }
 
         return array_values(array_unique($ids));
+    }
+
+
+    public function isStoreEndpointEnabled(?string $storeCode = null): bool
+    {
+        return $this->isStoreFlag(self::XML_PATH_STORE_ENDPOINT_ENABLED, $storeCode);
+    }
+
+    public function allowStoreIncludeSources(?string $storeCode = null): bool
+    {
+        return $this->isStoreFlag(self::XML_PATH_STORE_ALLOW_INCLUDE_SOURCES, $storeCode);
+    }
+
+    public function getStoreMetadataValue(string $path, ?string $storeCode = null, mixed $default = null): mixed
+    {
+        $value = $this->scopeConfig->getValue($path, ScopeInterface::SCOPE_STORES, $storeCode);
+        return $value !== null && $value !== '' ? $value : $default;
+    }
+
+    public function getStoreMetadataFlag(string $path, ?string $storeCode = null): bool
+    {
+        return $this->isStoreFlag($path, $storeCode);
+    }
+
+    public function getStoreSitemapMode(?string $storeCode = null): string
+    {
+        $mode = (string)$this->getStoreMetadataValue(self::XML_PATH_STORE_SITEMAP_MODE, $storeCode, 'summary');
+        return in_array($mode, ['summary', 'full'], true) ? $mode : 'summary';
+    }
+
+    public function getStoreSitemapLimit(?string $storeCode = null): int
+    {
+        return max(1, min(10000, (int)$this->getStoreMetadataValue(self::XML_PATH_STORE_SITEMAP_LIMIT, $storeCode, 1000)));
+    }
+
+    private function isStoreFlag(string $path, ?string $storeCode = null): bool
+    {
+        return $this->scopeConfig->isSetFlag($path, ScopeInterface::SCOPE_STORES, $storeCode);
     }
 
     private function isFlag(string $path, ?string $scopeCode = null): bool

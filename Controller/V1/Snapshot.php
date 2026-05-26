@@ -12,6 +12,7 @@ use Amida\ProductDeltaFeed\Model\Feed\ApiRequestGate;
 use Amida\ProductDeltaFeed\Model\Feed\CategorySnapshotService;
 use Amida\ProductDeltaFeed\Model\Feed\SnapshotService;
 use Amida\ProductDeltaFeed\Model\Feed\ZstdCompressor;
+use Amida\ProductDeltaFeed\Model\Store\AttributeDictionaryService;
 use Amida\ProductDeltaFeed\Model\StoreScopeResolver;
 
 class Snapshot extends AbstractFeedAction
@@ -25,7 +26,8 @@ class Snapshot extends AbstractFeedAction
         ZstdCompressor $compressor,
         ApiRequestGate $requestGate,
         private readonly SnapshotService $snapshotService,
-        private readonly CategorySnapshotService $categorySnapshotService
+        private readonly CategorySnapshotService $categorySnapshotService,
+        private readonly AttributeDictionaryService $attributeDictionaryService
     ) {
         parent::__construct($context, $rawFactory, $jsonFactory, $config, $storeScopeResolver, $compressor, $requestGate);
     }
@@ -37,10 +39,6 @@ class Snapshot extends AbstractFeedAction
             return $this->invalidResponse(404, 'Not found');
         }
 
-        if ($this->compressor->isEnabled() && !$this->compressor->isAvailable()) {
-            return $this->invalidResponse(503, 'zstd compression is enabled but ext-zstd is not installed');
-        }
-
         $stream = (string)$this->getRequest()->getParam('stream', Config::STREAM_CONTENT);
         if (!$this->config->isStreamEnabled($stream)) {
             return $this->invalidResponse(404, 'Unknown or disabled stream');
@@ -49,6 +47,14 @@ class Snapshot extends AbstractFeedAction
         $storeCode = $this->resolveStoreCode();
         if ($storeCode === null) {
             return $this->invalidResponse(400, 'Invalid store code');
+        }
+
+        if ($stream === Config::STREAM_ATTRIBUTES) {
+            return $this->jsonResponse($this->attributeDictionaryService->build($storeCode, $this->parseCodes()));
+        }
+
+        if ($this->compressor->isEnabled() && !$this->compressor->isAvailable()) {
+            return $this->invalidResponse(503, 'zstd compression is enabled but ext-zstd is not installed');
         }
 
         $afterStateId = max(0, (int)$this->getRequest()->getParam('after_state_id', 0));
@@ -87,6 +93,19 @@ class Snapshot extends AbstractFeedAction
             static fn (string $item): bool => $item !== ''
         ));
         return array_slice($parts, 0, $fromBody ? $this->config->getSkuFilterPostLimit() : $this->config->getSkuFilterGetLimit());
+    }
+
+    /** @return string[] */
+    private function parseCodes(): array
+    {
+        $body = $this->readJsonBody();
+        $value = $body['codes'] ?? $this->getRequest()->getParam('codes', '');
+        $parts = is_array($value) ? $value : explode(',', (string)$value);
+        $parts = array_values(array_filter(
+            array_unique(array_map(static fn (mixed $item): string => trim((string)$item), $parts)),
+            static fn (string $item): bool => $item !== ''
+        ));
+        return array_slice($parts, 0, $this->getRequest()->isPost() ? $this->config->getSkuFilterPostLimit() : $this->config->getSkuFilterGetLimit());
     }
 
     /** @return array<string, mixed> */

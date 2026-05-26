@@ -47,3 +47,28 @@ See [proto/amida_product_delta_feed_v1.proto](proto/amida_product_delta_feed_v1.
 ## Specification
 
 See [docs/SPEC.md](docs/SPEC.md) and [docs/SPEC_CATEGORIES_OFFERS_DIRECT_SQL.md](docs/SPEC_CATEGORIES_OFFERS_DIRECT_SQL.md).
+
+## Store metadata endpoint
+
+This build adds a compact store passport endpoint for StoreAgent bootstrap:
+
+```http
+GET /amidafeed/v1/store/key/<KEY>?store=<STORE>
+```
+
+It returns store identity, languages, currency, direct-SQL counts, contacts, addresses, pages, sitemap summary and diagnostics. Data is resolved by priority:
+
+```text
+admin_override > site_adapter > auto > fallback/null
+```
+
+Source diagnostics are exposed only through `source_map` when both `include_sources=1` and `amida_productdeltafeed/store_metadata/allow_include_sources=1` are set.
+
+Attributes dictionary endpoint:
+
+```http
+GET /amidafeed/v1/attributes/key/<KEY>?store=<STORE>&codes=color,size
+GET /amidafeed/v1/snapshot/key/<KEY>/stream/attributes?store=<STORE>&codes=color,size
+```
+
+See `docs/SPEC_STORE_ENDPOINT.md` and `docs/TESTING_STORE_ENDPOINT.md`.

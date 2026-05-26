@@ -28,6 +28,7 @@
                 <availability_enabled>1</availability_enabled>
                 <category_enabled>1</category_enabled>
                 <offer_enabled>1</offer_enabled>
+                <attributes_enabled>1</attributes_enabled>
                 <categories_enabled>1</categories_enabled>
                 <curated_enabled>1</curated_enabled>
                 <all_enabled>1</all_enabled>
@@ -36,6 +37,23 @@
                 <include_attributes></include_attributes>
                 <exclude_attributes>price,special_price,special_from_date,special_to_date,status,url_key,name,description,short_description,meta_title,meta_description,meta_keyword,category_ids</exclude_attributes>
             </content>
+            <store_metadata>
+                <endpoint_enabled>1</endpoint_enabled>
+                <allow_include_sources>0</allow_include_sources>
+                <main_store_code></main_store_code>
+                <name_override></name_override>
+                <description_override></description_override>
+                <home_url_override></home_url_override>
+                <logo_url_override></logo_url_override>
+                <include_counts_default>1</include_counts_default>
+                <sitemap_mode>summary</sitemap_mode>
+                <sitemap_limit>1000</sitemap_limit>
+                <contacts_json></contacts_json>
+                <pages_json></pages_json>
+                <addresses_json></addresses_json>
+                <sitemap_urls_json></sitemap_urls_json>
+                <attribute_metadata_json></attribute_metadata_json>
+            </store_metadata>
             <runtime>
                 <suppress_while_disabled>1</suppress_while_disabled>
                 <reemit_full_on_enable>1</reemit_full_on_enable>

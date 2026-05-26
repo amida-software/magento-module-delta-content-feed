@@ -18,6 +18,7 @@ class Streams implements OptionSourceInterface
             ['value' => Config::STREAM_CATEGORY, 'label' => __('Category assignments')],
             ['value' => Config::STREAM_OFFER, 'label' => __('Offer')],
             ['value' => Config::STREAM_CATEGORIES, 'label' => __('Categories dictionary')],
+            ['value' => Config::STREAM_ATTRIBUTES, 'label' => __('Attributes dictionary')],
             ['value' => Config::STREAM_CURATED, 'label' => __('Curated product')],
             ['value' => Config::STREAM_ALL, 'label' => __('All')],
         ];
