@@ -20,16 +20,27 @@ class SnapshotService
     ) {
     }
 
-    public function build(string $stream, string $storeCode, int $afterStateId): array
+    /** @param array<string, mixed> $filters */
+    public function build(string $stream, string $storeCode, int $afterStateId, array $filters = []): array
     {
         if ($afterStateId <= 0 && $this->stateSnapshot->count() === 0) {
             $this->snapshotRebuilder->rebuild();
         }
 
-        $rows = $this->stateSnapshot->fetchSnapshotRows($stream, $storeCode, $afterStateId, $this->config->getCandidateLimit());
+        $skus = $this->normalizeSkus((array)($filters['skus'] ?? []));
+        $includeOffer = (bool)($filters['include_offer'] ?? false);
+        $candidateLimit = $this->config->getCandidateLimit();
+        $isSkuLookup = $skus !== [];
+
+        // SKU lookup is an explicit current-state read. It intentionally ignores after_state_id.
+        $rows = $isSkuLookup
+            ? $this->stateSnapshot->fetchSnapshotRowsBySkus($stream, $storeCode, $skus, min($candidateLimit, count($skus)))
+            : $this->stateSnapshot->fetchSnapshotRows($stream, $storeCode, $afterStateId, $candidateLimit);
+
+        $offerMap = $includeOffer ? $this->loadOfferMap($rows, $storeCode) : [];
+        $diagnostics = $this->buildSkuDiagnostics($isSkuLookup ? $skus : [], $rows, $stream);
         $accepted = [];
-        $diagnostics = [];
-        $toStateId = $afterStateId;
+        $toStateId = $isSkuLookup ? 0 : $afterStateId;
         $hasMore = false;
         $encoded = null;
         $compressed = null;
@@ -37,27 +48,29 @@ class SnapshotService
         $maxBytes = $this->config->getMaxBatchSizeBytes();
 
         foreach ($rows as $row) {
-            $item = $this->rowToItem($row, $stream, $storeCode);
+            $item = $this->rowToItem($row, $stream, $storeCode, $includeOffer, $offerMap, $diagnostics);
             $trialItems = array_merge($accepted, [$item]);
             $trialEncoded = $this->encoder->encodeSnapshotEnvelope([
                 'schema_version' => 1,
                 'stream' => $stream,
                 'store_code' => $storeCode,
-                'from_state_id' => $afterStateId,
-                'to_state_id' => (int)$row['state_id'],
+                'from_state_id' => $isSkuLookup ? 0 : $afterStateId,
+                'to_state_id' => $isSkuLookup ? 0 : (int)$row['state_id'],
                 'has_more' => false,
                 'changes_highwater_event_id' => $highwaterEventId,
             ], $trialItems, $diagnostics);
             $trialCompressed = $this->compressor->compress($trialEncoded);
             if (strlen($trialCompressed) > $maxBytes) {
-                $hasMore = true;
+                $hasMore = !$isSkuLookup;
                 break;
             }
 
             $accepted = $trialItems;
             $encoded = $trialEncoded;
             $compressed = $trialCompressed;
-            $toStateId = (int)$row['state_id'];
+            if (!$isSkuLookup) {
+                $toStateId = (int)$row['state_id'];
+            }
         }
 
         if ($encoded === null || $compressed === null) {
@@ -65,7 +78,7 @@ class SnapshotService
                 'schema_version' => 1,
                 'stream' => $stream,
                 'store_code' => $storeCode,
-                'from_state_id' => $afterStateId,
+                'from_state_id' => $isSkuLookup ? 0 : $afterStateId,
                 'to_state_id' => $toStateId,
                 'has_more' => false,
                 'changes_highwater_event_id' => $highwaterEventId,
@@ -73,7 +86,7 @@ class SnapshotService
             $compressed = $this->compressor->compress($encoded);
         }
 
-        if (!$hasMore && count($rows) === $this->config->getCandidateLimit()) {
+        if (!$isSkuLookup && !$hasMore && count($rows) === $candidateLimit) {
             $hasMore = true;
         }
 
@@ -85,17 +98,39 @@ class SnapshotService
                 'X-Amida-Schema-Version' => '1',
                 'X-Amida-Stream' => $stream,
                 'X-Amida-Store' => $storeCode,
-                'X-Amida-From-State-Id' => (string)$afterStateId,
+                'X-Amida-From-State-Id' => (string)($isSkuLookup ? 0 : $afterStateId),
                 'X-Amida-To-State-Id' => (string)$toStateId,
                 'X-Amida-Has-More' => $hasMore ? '1' : '0',
                 'X-Amida-Changes-Highwater-Event-Id' => (string)$highwaterEventId,
                 'X-Amida-Uncompressed-Length' => (string)strlen($encoded),
+                'X-Amida-Mode' => $isSkuLookup ? 'sku_lookup' : 'cursor_snapshot',
             ] + ($this->compressor->isEnabled() ? ['Content-Encoding' => 'zstd'] : []),
         ];
     }
 
-    private function rowToItem(array $row, string $stream, string $storeCode): array
+    /**
+     * @param array<string, array<string, mixed>> $offerMap
+     * @param array<int, array<string, mixed>> $diagnostics
+     */
+    private function rowToItem(array $row, string $stream, string $storeCode, bool $includeOffer = false, array $offerMap = [], array &$diagnostics = []): array
     {
+        $payload = json_decode((string)$row['state_json'], true) ?: [];
+        $stateHash = (string)($row['state_hash'] ?? '');
+        if ($includeOffer && $stream !== Config::STREAM_OFFER) {
+            $sku = (string)$row['sku'];
+            $offerState = $offerMap[$sku]['state'] ?? null;
+            if (is_array($offerState) && isset($offerState['offer'])) {
+                $payload['offer'] = $offerState['offer'];
+                $stateHash = $this->hashPayload($payload);
+            } else {
+                $diagnostics[] = [
+                    'code' => 'offer_state_missing',
+                    'message' => 'include_offer=1 requested, but offer state was not found for this SKU.',
+                    'sku' => $sku,
+                ];
+            }
+        }
+
         return [
             'state_id' => (int)$row['state_id'],
             'product_id' => (int)$row['entity_id'],
@@ -103,8 +138,77 @@ class SnapshotService
             'stream' => $stream,
             'store_code' => $storeCode,
             'updated_at' => (string)($row['updated_at'] ?? ''),
-            'state_hash' => (string)($row['state_hash'] ?? ''),
-            'payload' => json_decode((string)$row['state_json'], true) ?: [],
+            'state_hash' => $stateHash,
+            'payload' => $payload,
         ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<string, array<string, mixed>>
+     */
+    private function loadOfferMap(array $rows, string $storeCode): array
+    {
+        $skus = [];
+        foreach ($rows as $row) {
+            $sku = trim((string)($row['sku'] ?? ''));
+            if ($sku !== '') {
+                $skus[] = $sku;
+            }
+        }
+        return $this->stateSnapshot->fetchStateMapBySkus(Config::STREAM_OFFER, $storeCode, $skus);
+    }
+
+    /** @param string[] $skus */
+    private function buildSkuDiagnostics(array $skus, array $rows, string $stream): array
+    {
+        if ($skus === []) {
+            return [];
+        }
+
+        $found = [];
+        foreach ($rows as $row) {
+            $found[(string)$row['sku']] = true;
+        }
+
+        $diagnostics = [];
+        foreach ($skus as $sku) {
+            if (!isset($found[$sku])) {
+                $diagnostics[] = [
+                    'code' => 'sku_state_missing',
+                    'message' => 'Requested SKU has no current state for stream ' . $stream . '.',
+                    'sku' => $sku,
+                ];
+            }
+        }
+        return $diagnostics;
+    }
+
+    /** @param string[] $skus */
+    private function normalizeSkus(array $skus): array
+    {
+        return array_values(array_filter(array_unique(array_map(static fn (mixed $sku): string => trim((string)$sku), $skus)), static fn (string $sku): bool => $sku !== ''));
+    }
+
+    /** @param mixed $payload */
+    private function hashPayload(mixed $payload): string
+    {
+        $payload = $this->sortRecursively($payload);
+        return hash('sha256', json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function sortRecursively(mixed $value): mixed
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+        $isList = array_keys($value) === range(0, count($value) - 1);
+        if (!$isList) {
+            ksort($value);
+        }
+        foreach ($value as $key => $child) {
+            $value[$key] = $this->sortRecursively($child);
+        }
+        return $value;
     }
 }

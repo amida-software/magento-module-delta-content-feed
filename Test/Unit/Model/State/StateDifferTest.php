@@ -69,4 +69,27 @@ class StateDifferTest extends TestCase
 
         self::assertSame(['curated.name', 'curated.prices'], $differ->changedFields($previous, $current, 'curated'));
     }
+    public function testDetectsOfferFieldChanges(): void
+    {
+        $differ = new StateDiffer(new JsonCanonicalizer());
+        $previous = [
+            'offer' => [
+                'sku' => 'SKU-1',
+                'prices' => ['old' => 100.0, 'current' => 90.0, 'currency' => 'EUR'],
+                'availability' => 'in_stock',
+                'qty' => 5.0,
+            ],
+        ];
+        $current = [
+            'offer' => [
+                'sku' => 'SKU-1',
+                'prices' => ['old' => 100.0, 'current' => 80.0, 'currency' => 'EUR'],
+                'availability' => 'in_stock',
+                'qty' => 5.0,
+            ],
+        ];
+
+        self::assertSame(['offer.prices'], $differ->changedFields($previous, $current, 'offer'));
+    }
+
 }

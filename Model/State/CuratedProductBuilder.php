@@ -19,22 +19,22 @@ class CuratedProductBuilder
     }
 
     /**
-     * @param array<string, mixed> $availability
+     * @param array<string, mixed> $offerContext Direct-SQL offer context, or legacy availability state for BC tests.
      * @return array<string, mixed>
      */
-    public function build(Product $product, string $storeCode, array $availability): array
+    public function build(Product $product, string $storeCode, array $offerContext): array
     {
         $categories = $this->categoryProvider->getCategories((int)$product->getId(), $storeCode);
+        $offer = (array)($offerContext['offer'] ?? []);
+        $availability = (array)($offerContext['availability'] ?? $offerContext);
+        $prices = $this->resolvePrices($product, $offer);
 
         return [
             'enabled' => (int)$product->getData('status') === Status::STATUS_ENABLED,
             'deleted' => false,
             'curated' => [
                 'sku' => (string)$product->getSku(),
-                'prices' => [
-                    'old' => $this->floatOrNull($product->getData('price') ?? $this->safeCall($product, 'getPrice')),
-                    'new' => $this->floatOrNull($this->safeCall($product, 'getFinalPrice') ?? $product->getData('price')),
-                ],
+                'prices' => $prices,
                 'availability' => $this->normalizeAvailability($availability),
                 'name' => $this->stringOrNull($product->getData('name')),
                 'description' => $this->stringOrNull($product->getData('description')),
@@ -52,7 +52,29 @@ class CuratedProductBuilder
     }
 
     /**
-     * @param array<string, mixed> $availability
+     * @param array<string, mixed> $offer
+     * @return array{old: ?float, new: ?float}
+     */
+    private function resolvePrices(Product $product, array $offer): array
+    {
+        $offerPrices = (array)($offer['prices'] ?? []);
+        if ($offerPrices !== []) {
+            return [
+                'old' => $this->floatOrNull($offerPrices['old'] ?? null),
+                'new' => $this->floatOrNull($offerPrices['current'] ?? $offerPrices['new'] ?? null),
+            ];
+        }
+
+        $legacyPrice = $this->floatOrNull($product->getData('price') ?? $this->safeCall($product, 'getPrice'));
+
+        return [
+            'old' => $legacyPrice,
+            'new' => $legacyPrice,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $offer
      * @return array<string, mixed>
      */
     private function normalizeAvailability(array $availability): array
@@ -69,7 +91,7 @@ class CuratedProductBuilder
     }
 
     /**
-     * @param array<string, mixed> $availability
+     * @param array<string, mixed> $offer
      */
     private function resolveAvailabilityFlag(array $availability): bool
     {

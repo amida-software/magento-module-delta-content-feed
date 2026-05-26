@@ -55,6 +55,52 @@ class FeedEncoder
         return $payload;
     }
 
+    /**
+     * @param array<int, array<string, mixed>> $items
+     * @param array<int, array<string, mixed>> $diagnostics
+     */
+    public function encodeCategoryChangesEnvelope(array $meta, array $items, array $diagnostics = []): string
+    {
+        $payload = '';
+        $payload .= $this->writer->int32(1, (int)($meta['schema_version'] ?? 1));
+        $payload .= $this->writer->string(2, (string)($meta['stream'] ?? 'categories'));
+        $payload .= $this->writer->string(3, (string)($meta['store_code'] ?? ''));
+        $payload .= $this->writer->uint64(4, (int)($meta['from_event_id'] ?? 0));
+        $payload .= $this->writer->uint64(5, (int)($meta['to_event_id'] ?? 0));
+        $payload .= $this->writer->bool(6, (bool)($meta['has_more'] ?? false));
+        $payload .= $this->writer->bool(7, (bool)($meta['cursor_expired'] ?? false));
+        foreach ($items as $item) {
+            $payload .= $this->writer->message(8, $this->encodeCategoryFeedItem($item));
+        }
+        foreach ($diagnostics as $diagnostic) {
+            $payload .= $this->writer->message(9, $this->encodeDiagnostic($diagnostic));
+        }
+        return $payload;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     * @param array<int, array<string, mixed>> $diagnostics
+     */
+    public function encodeCategorySnapshotEnvelope(array $meta, array $items, array $diagnostics = []): string
+    {
+        $payload = '';
+        $payload .= $this->writer->int32(1, (int)($meta['schema_version'] ?? 1));
+        $payload .= $this->writer->string(2, (string)($meta['stream'] ?? 'categories'));
+        $payload .= $this->writer->string(3, (string)($meta['store_code'] ?? ''));
+        $payload .= $this->writer->uint64(4, (int)($meta['from_state_id'] ?? 0));
+        $payload .= $this->writer->uint64(5, (int)($meta['to_state_id'] ?? 0));
+        $payload .= $this->writer->bool(6, (bool)($meta['has_more'] ?? false));
+        $payload .= $this->writer->uint64(7, (int)($meta['changes_highwater_event_id'] ?? 0));
+        foreach ($items as $item) {
+            $payload .= $this->writer->message(8, $this->encodeCategorySnapshotItem($item));
+        }
+        foreach ($diagnostics as $diagnostic) {
+            $payload .= $this->writer->message(9, $this->encodeDiagnostic($diagnostic));
+        }
+        return $payload;
+    }
+
     private function encodeFeedItem(array $item): string
     {
         $payload = '';
@@ -116,6 +162,9 @@ class FeedEncoder
         if (!empty($state['curated'])) {
             $payload .= $this->writer->message(7, $this->encodeCuratedProduct((array)$state['curated']));
         }
+        if (!empty($state['offer'])) {
+            $payload .= $this->writer->message(8, $this->encodeOfferState((array)$state['offer']));
+        }
         return $payload;
     }
 
@@ -172,7 +221,7 @@ class FeedEncoder
     private function encodePriceState(array $state): string
     {
         $payload = '';
-        if (isset($state['price'])) {
+        if (isset($state['price']) && $state['price'] !== null) {
             $payload .= $this->writer->double(1, (float)$state['price']);
         }
         if (isset($state['special_price']) && $state['special_price'] !== null) {
@@ -192,6 +241,12 @@ class FeedEncoder
         }
         if (($state['currency_code'] ?? '') !== '') {
             $payload .= $this->writer->string(7, (string)$state['currency_code']);
+        }
+        if (isset($state['current']) && $state['current'] !== null) {
+            $payload .= $this->writer->double(8, (float)$state['current']);
+        }
+        if (($state['source'] ?? '') !== '') {
+            $payload .= $this->writer->string(9, (string)$state['source']);
         }
         return $payload;
     }
@@ -244,6 +299,12 @@ class FeedEncoder
         if (($state['stock_status'] ?? '') !== '') {
             $payload .= $this->writer->string(6, (string)$state['stock_status']);
         }
+        if (($state['availability'] ?? '') !== '') {
+            $payload .= $this->writer->string(7, (string)$state['availability']);
+        }
+        if (($state['source'] ?? '') !== '') {
+            $payload .= $this->writer->string(8, (string)$state['source']);
+        }
         return $payload;
     }
 
@@ -292,7 +353,6 @@ class FeedEncoder
         foreach ((array)($state['related_products'] ?? []) as $relatedProduct) {
             $payload .= $this->writer->message(14, $this->encodeRelatedProduct((array)$relatedProduct));
         }
-
         return $payload;
     }
 
@@ -305,7 +365,6 @@ class FeedEncoder
         if (array_key_exists('new', $prices) && $prices['new'] !== null) {
             $payload .= $this->writer->double(2, (float)$prices['new']);
         }
-
         return $payload;
     }
 
@@ -318,7 +377,6 @@ class FeedEncoder
         if (isset($availability['qty'])) {
             $payload .= $this->writer->double(2, (float)$availability['qty']);
         }
-
         return $payload;
     }
 
@@ -338,7 +396,189 @@ class FeedEncoder
         if (isset($relatedProduct['position'])) {
             $payload .= $this->writer->sint32(5, (int)$relatedProduct['position']);
         }
+        return $payload;
+    }
 
+    private function encodeOfferState(array $offer): string
+    {
+        $payload = '';
+        $payload .= $this->writer->uint64(1, (int)($offer['product_id'] ?? 0));
+        if (($offer['sku'] ?? '') !== '') {
+            $payload .= $this->writer->string(2, (string)$offer['sku']);
+        }
+        if (!empty($offer['parent_product_id'])) {
+            $payload .= $this->writer->uint64(3, (int)$offer['parent_product_id']);
+        }
+        if (($offer['parent_sku'] ?? '') !== '') {
+            $payload .= $this->writer->string(4, (string)$offer['parent_sku']);
+        }
+        if (($offer['magento_type_id'] ?? '') !== '') {
+            $payload .= $this->writer->string(5, (string)$offer['magento_type_id']);
+        }
+        if (!empty($offer['prices'])) {
+            $payload .= $this->writer->message(6, $this->encodeOfferPrices((array)$offer['prices']));
+        }
+        if (($offer['availability'] ?? '') !== '') {
+            $payload .= $this->writer->string(7, (string)$offer['availability']);
+        }
+        if (isset($offer['qty'])) {
+            $payload .= $this->writer->double(8, (float)$offer['qty']);
+        }
+        if (isset($offer['is_salable'])) {
+            $payload .= $this->writer->bool(9, (bool)$offer['is_salable']);
+        }
+        if (isset($offer['is_in_stock'])) {
+            $payload .= $this->writer->bool(10, (bool)$offer['is_in_stock']);
+        }
+        if (($offer['stock_status'] ?? '') !== '') {
+            $payload .= $this->writer->string(11, (string)$offer['stock_status']);
+        }
+        if (isset($offer['manage_stock'])) {
+            $payload .= $this->writer->bool(12, (bool)$offer['manage_stock']);
+        }
+        if (isset($offer['backorders'])) {
+            $payload .= $this->writer->int32(13, (int)$offer['backorders']);
+        }
+        if (($offer['source_updated_at'] ?? '') !== '') {
+            $payload .= $this->writer->string(14, (string)$offer['source_updated_at']);
+        }
+        if (($offer['source'] ?? '') !== '') {
+            $payload .= $this->writer->string(15, (string)$offer['source']);
+        }
+        return $payload;
+    }
+
+    private function encodeOfferPrices(array $prices): string
+    {
+        $payload = '';
+        if (array_key_exists('old', $prices) && $prices['old'] !== null) {
+            $payload .= $this->writer->double(1, (float)$prices['old']);
+        }
+        if (array_key_exists('current', $prices) && $prices['current'] !== null) {
+            $payload .= $this->writer->double(2, (float)$prices['current']);
+        }
+        if (($prices['currency'] ?? '') !== '') {
+            $payload .= $this->writer->string(3, (string)$prices['currency']);
+        }
+        if (array_key_exists('special_price', $prices) && $prices['special_price'] !== null) {
+            $payload .= $this->writer->double(4, (float)$prices['special_price']);
+        }
+        if (($prices['special_from_date'] ?? '') !== '') {
+            $payload .= $this->writer->string(5, (string)$prices['special_from_date']);
+        }
+        if (($prices['special_to_date'] ?? '') !== '') {
+            $payload .= $this->writer->string(6, (string)$prices['special_to_date']);
+        }
+        if (($prices['source'] ?? '') !== '') {
+            $payload .= $this->writer->string(7, (string)$prices['source']);
+        }
+        return $payload;
+    }
+
+    private function encodeCategoryFeedItem(array $item): string
+    {
+        $payload = '';
+        $payload .= $this->writer->uint64(1, (int)($item['event_id'] ?? 0));
+        $payload .= $this->writer->string(2, (string)($item['stream'] ?? 'categories'));
+        $payload .= $this->writer->uint64(3, (int)($item['category_id'] ?? 0));
+        $payload .= $this->writer->string(4, (string)($item['store_code'] ?? ''));
+        $payload .= $this->writer->int32(5, $this->mapEventType((string)($item['event_type'] ?? '')));
+        foreach ((array)($item['changed_fields'] ?? []) as $field) {
+            $payload .= $this->writer->string(6, (string)$field);
+        }
+        if (($item['source_updated_at'] ?? '') !== '') {
+            $payload .= $this->writer->string(7, (string)$item['source_updated_at']);
+        }
+        if (($item['emitted_at'] ?? '') !== '') {
+            $payload .= $this->writer->string(8, (string)$item['emitted_at']);
+        }
+        $payload .= $this->writer->int32(9, (int)($item['payload_version'] ?? 1));
+        $payload .= $this->writer->string(10, (string)($item['payload_hash'] ?? ''));
+        $payload .= $this->writer->message(11, $this->encodeCategoryPayload((array)($item['payload'] ?? [])));
+        return $payload;
+    }
+
+    private function encodeCategorySnapshotItem(array $item): string
+    {
+        $payload = '';
+        $payload .= $this->writer->uint64(1, (int)($item['state_id'] ?? 0));
+        $payload .= $this->writer->uint64(2, (int)($item['category_id'] ?? 0));
+        $payload .= $this->writer->string(3, (string)($item['stream'] ?? 'categories'));
+        $payload .= $this->writer->string(4, (string)($item['store_code'] ?? ''));
+        if (($item['updated_at'] ?? '') !== '') {
+            $payload .= $this->writer->string(5, (string)$item['updated_at']);
+        }
+        $payload .= $this->writer->string(6, (string)($item['state_hash'] ?? ''));
+        $payload .= $this->writer->message(7, $this->encodeCategoryPayload((array)($item['payload'] ?? [])));
+        return $payload;
+    }
+
+    private function encodeCategoryPayload(array $state): string
+    {
+        $payload = '';
+        $payload .= $this->writer->bool(1, (bool)($state['enabled'] ?? false));
+        $payload .= $this->writer->bool(2, (bool)($state['deleted'] ?? false));
+        if (!empty($state['category'])) {
+            $payload .= $this->writer->message(3, $this->encodeCategoryDocument((array)$state['category']));
+        }
+        return $payload;
+    }
+
+    private function encodeCategoryDocument(array $category): string
+    {
+        $payload = '';
+        $payload .= $this->writer->uint64(1, (int)($category['category_id'] ?? 0));
+        if (($category['external_id'] ?? '') !== '') {
+            $payload .= $this->writer->string(2, (string)$category['external_id']);
+        }
+        if (isset($category['enabled'])) {
+            $payload .= $this->writer->bool(3, (bool)$category['enabled']);
+        }
+        if (($category['store_code'] ?? '') !== '') {
+            $payload .= $this->writer->string(4, (string)$category['store_code']);
+        }
+        if (!empty($category['parent_id'])) {
+            $payload .= $this->writer->uint64(5, (int)$category['parent_id']);
+        }
+        if (($category['path'] ?? '') !== '') {
+            $payload .= $this->writer->string(6, (string)$category['path']);
+        }
+        if (isset($category['level'])) {
+            $payload .= $this->writer->uint64(7, (int)$category['level']);
+        }
+        if (isset($category['position'])) {
+            $payload .= $this->writer->sint32(8, (int)$category['position']);
+        }
+        if (($category['url_key'] ?? '') !== '') {
+            $payload .= $this->writer->string(9, (string)$category['url_key']);
+        }
+        if (($category['url_path'] ?? '') !== '') {
+            $payload .= $this->writer->string(10, (string)$category['url_path']);
+        }
+        if (($category['url'] ?? '') !== '') {
+            $payload .= $this->writer->string(11, (string)$category['url']);
+        }
+        if (($category['name'] ?? '') !== '') {
+            $payload .= $this->writer->string(12, (string)$category['name']);
+        }
+        if (($category['title'] ?? '') !== '') {
+            $payload .= $this->writer->string(13, (string)$category['title']);
+        }
+        if (($category['description'] ?? '') !== '') {
+            $payload .= $this->writer->string(14, (string)$category['description']);
+        }
+        if (($category['meta_title'] ?? '') !== '') {
+            $payload .= $this->writer->string(15, (string)$category['meta_title']);
+        }
+        if (($category['meta_description'] ?? '') !== '') {
+            $payload .= $this->writer->string(16, (string)$category['meta_description']);
+        }
+        if (isset($category['include_in_menu'])) {
+            $payload .= $this->writer->bool(17, (bool)$category['include_in_menu']);
+        }
+        if (($category['source_updated_at'] ?? '') !== '') {
+            $payload .= $this->writer->string(18, (string)$category['source_updated_at']);
+        }
         return $payload;
     }
 
@@ -349,6 +589,12 @@ class FeedEncoder
         $payload .= $this->writer->string(2, (string)($diagnostic['message'] ?? ''));
         if (isset($diagnostic['event_id'])) {
             $payload .= $this->writer->uint64(3, (int)$diagnostic['event_id']);
+        }
+        if (isset($diagnostic['sku'])) {
+            $payload .= $this->writer->string(4, (string)$diagnostic['sku']);
+        }
+        if (isset($diagnostic['category_id'])) {
+            $payload .= $this->writer->uint64(5, (int)$diagnostic['category_id']);
         }
         return $payload;
     }

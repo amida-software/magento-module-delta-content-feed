@@ -137,7 +137,7 @@ MVP проектируется под классический Magento/Adobe Com
 - MSI (Multi-Source Inventory)
 - Legacy stock
 
-Через адаптер `InventoryProviderInterface`.
+Через прямой SQL-провайдер offer: цена и наличие читаются из source-of-truth таблиц Magento DB, без `inventory_stock_<id>` индексных таблиц, без `catalog_product_index_price`, без `StockRegistry` / `GetProductSalableQty` / `IsProductSalable` и без `getFinalPrice`.
 
 ---
 
@@ -1115,8 +1115,7 @@ Endpoint чтения должен работать из:
 
 ### Интерфейсы
 
-- `InventoryProviderInterface`
-- `PriceProviderInterface`
+- `DirectSqlOfferProvider`
 - `CategoryProviderInterface`
 - `AttributeValueNormalizerInterface`
 - `SerializerInterface`
@@ -1176,3 +1175,72 @@ Endpoint чтения должен работать из:
 - и без грязной мешанины из всех товарных данных в одном неуправляемом потоке.
 
 Именно так и надо делать такой модуль, если цель — продовая надежность, а не демо на два дня.
+
+
+---
+
+## Addendum: offer/categories direct SQL extension
+
+See `docs/OFFER_CATEGORIES_SQL_SPEC.md`. The extension adds `offer` and `categories` streams, SKU/date filters, product `include_offer=1`, and direct SQL source-table extraction for offer price/availability.
+
+---
+
+## 21. Amendment: direct-SQL offer, category dictionary and SKU/date filters
+
+This implementation adds two delivery streams:
+
+- `offer` — current sellability state by SKU: price, availability, salable qty and parent SKU relation.
+- `categories` — category tree/dictionary, separate from the older product-category assignment stream `category`.
+
+### 21.1. Direct SQL rule for `offer`
+
+The offer state builder must read price and stock directly from Magento source tables. It must not use price/stock index tables and must not use inventory abstraction APIs on the hot offer path.
+
+Forbidden for offer construction:
+
+- `catalog_product_index_price`
+- `cataloginventory_stock_status`
+- `inventory_stock_<id>`
+- `StockRegistry`
+- `GetProductSalableQtyInterface`
+- `IsProductSalableInterface`
+- `Product::getFinalPrice()`
+
+Current direct SQL source tables:
+
+- `catalog_product_entity*` EAV tables for price/status/special price/special date values.
+- `cataloginventory_stock_item` for legacy stock flags.
+- `inventory_stock_sales_channel`, `inventory_source_stock_link`, `inventory_source_item`, `inventory_reservation` for MSI stock/source/reservation calculation.
+- `catalog_product_relation`, `catalog_product_super_link` for parent/variant links.
+
+### 21.2. New feed query parameters
+
+Product and offer snapshots support exact SKU lookup:
+
+```http
+GET /amidafeed/v1/snapshot/key/<KEY>/stream/content?store=default&sku=SKU-1,SKU-2
+GET /amidafeed/v1/snapshot/key/<KEY>/stream/offer?store=default&sku=SKU-1,SKU-2
+```
+
+Product snapshots and changes support inlining the current offer state:
+
+```http
+GET /amidafeed/v1/snapshot/key/<KEY>/stream/content?store=default&sku=SKU-1&include_offer=1
+GET /amidafeed/v1/changes/key/<KEY>/stream/content?store=default&after_event_id=0&include_offer=1
+```
+
+Changes support date-filtered reads with normal event cursor pagination:
+
+```http
+GET /amidafeed/v1/changes/key/<KEY>/stream/offer?store=default&changed_from=2026-05-01%2000:00:00&changed_to=2026-05-02%2000:00:00&after_event_id=0
+```
+
+Category dictionary reads:
+
+```http
+GET /amidafeed/v1/snapshot/key/<KEY>/stream/categories?store=default
+GET /amidafeed/v1/snapshot/key/<KEY>/stream/categories?store=default&category_id=12,15
+GET /amidafeed/v1/changes/key/<KEY>/stream/categories?store=default&changed_from=2026-05-01%2000:00:00&changed_to=2026-05-02%2000:00:00
+```
+
+Full details are in `docs/SPEC_OFFER_CATEGORIES_SQL.md`.

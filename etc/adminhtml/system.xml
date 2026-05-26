@@ -117,13 +117,25 @@
                     <label>Enable category stream</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                 </field>
-                <field id="curated_enabled" translate="label comment" type="select" sortOrder="60"
+                <field id="offer_enabled" translate="label comment" type="select" sortOrder="60"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enable offer stream</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Standalone SKU offer stream built from direct SQL source tables for price and inventory.</comment>
+                </field>
+                <field id="categories_enabled" translate="label comment" type="select" sortOrder="65"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enable categories dictionary stream</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Category tree dictionary. This is different from the product category assignment stream.</comment>
+                </field>
+                <field id="curated_enabled" translate="label comment" type="select" sortOrder="70"
                        showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Enable curated product stream</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                     <comment>Consumer-friendly full product document with sku, prices, simple availability, name, description, image URLs, brand, product type, category IDs, notes and related products.</comment>
                 </field>
-                <field id="all_enabled" translate="label" type="select" sortOrder="70"
+                <field id="all_enabled" translate="label" type="select" sortOrder="80"
                        showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Enable unified all stream</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
@@ -165,6 +177,21 @@
                        showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Export deleted products as tombstones</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="sku_filter_get_limit" translate="label comment" type="text" sortOrder="40"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>GET SKU filter limit</label>
+                    <comment>Maximum comma-separated SKUs accepted in query string.</comment>
+                </field>
+                <field id="sku_filter_post_limit" translate="label comment" type="text" sortOrder="50"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>POST SKU filter limit</label>
+                    <comment>Maximum SKUs accepted in JSON body.</comment>
+                </field>
+                <field id="date_filter_max_days" translate="label comment" type="text" sortOrder="60"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Date filter max range, days</label>
+                    <comment>Maximum accepted changed_from/changed_to window for changes endpoints.</comment>
                 </field>
             </group>
         </section>

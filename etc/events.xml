@@ -13,4 +13,12 @@
         <observer name="amida_productdeltafeed_category_products_change"
                   instance="Amida\ProductDeltaFeed\Observer\CategoryChangeProductsObserver"/>
     </event>
+    <event name="catalog_category_save_after">
+        <observer name="amida_productdeltafeed_category_save"
+                  instance="Amida\ProductDeltaFeed\Observer\CategorySaveAfterObserver"/>
+    </event>
+    <event name="catalog_category_delete_after_done">
+        <observer name="amida_productdeltafeed_category_delete"
+                  instance="Amida\ProductDeltaFeed\Observer\CategoryDeleteAfterObserver"/>
+    </event>
 </config>

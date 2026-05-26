@@ -6,13 +6,12 @@ namespace Amida\ProductDeltaFeed\Model\State;
 use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\Catalog\Model\Product;
 use Magento\Catalog\Model\Product\Attribute\Source\Status;
-use Magento\Directory\Model\CurrencyFactory;
 use Magento\Eav\Model\Config as EavConfig;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Store\Model\StoreManagerInterface;
 use Amida\ProductDeltaFeed\Model\AttributeSelector;
 use Amida\ProductDeltaFeed\Model\Config;
-use Amida\ProductDeltaFeed\Model\Inventory\InventoryProvider;
+use Amida\ProductDeltaFeed\Model\Offer\DirectSqlOfferProvider;
 use Amida\ProductDeltaFeed\Model\State\CuratedProductBuilder;
 
 class ProductStateBuilder
@@ -22,10 +21,9 @@ class ProductStateBuilder
         private readonly AttributeSelector $attributeSelector,
         private readonly Config $config,
         private readonly EavConfig $eavConfig,
-        private readonly InventoryProvider $inventoryProvider,
+        private readonly DirectSqlOfferProvider $offerProvider,
         private readonly ResourceConnection $resourceConnection,
         private readonly StoreManagerInterface $storeManager,
-        private readonly CurrencyFactory $currencyFactory,
         private readonly CuratedProductBuilder $curatedProductBuilder
     ) {
     }
@@ -42,7 +40,11 @@ class ProductStateBuilder
         $sku = (string)$product->getSku();
         $enabled = (int)$product->getStatus() === Status::STATUS_ENABLED;
         $sourceUpdatedAt = (string)($product->getUpdatedAt() ?? '');
-        $availability = $this->inventoryProvider->build($sku, $storeCode);
+        $offer = $this->offerProvider->buildByProductId($productId, $storeCode, $enabled)
+            ?: $this->fallbackOffer($productId, $sku, $storeCode, $enabled, $sourceUpdatedAt);
+        $offerData = (array)($offer['offer'] ?? []);
+        $price = $this->priceStateFromOffer($offerData);
+        $availability = $this->availabilityStateFromOffer($offerData);
 
         return [
             'meta' => [
@@ -64,7 +66,7 @@ class ProductStateBuilder
             ],
             'price' => [
                 'enabled' => $enabled,
-                'price' => $this->buildPriceState($product, $storeCode),
+                'price' => $price,
                 'deleted' => false,
             ],
             'availability' => [
@@ -72,12 +74,81 @@ class ProductStateBuilder
                 'availability' => $availability,
                 'deleted' => false,
             ],
+            'offer' => $offer,
             'category' => [
                 'enabled' => $enabled,
                 'category' => $this->buildCategoryState($productId),
                 'deleted' => false,
             ],
-            'curated' => $this->curatedProductBuilder->build($product, $storeCode, $availability),
+            'curated' => $this->curatedProductBuilder->build($product, $storeCode, [
+                'offer' => $offerData,
+                'availability' => $availability,
+            ]),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function fallbackOffer(int $productId, string $sku, string $storeCode, bool $enabled, string $sourceUpdatedAt): array
+    {
+        return [
+            'enabled' => $enabled,
+            'deleted' => false,
+            'offer' => [
+                'product_id' => $productId,
+                'sku' => $sku,
+                'prices' => [
+                    'old' => null,
+                    'current' => null,
+                    'currency' => (string)$this->storeManager->getStore($storeCode)->getCurrentCurrencyCode(),
+                    'source' => 'direct_sql_fallback',
+                ],
+                'availability' => $enabled ? 'out_of_stock' : 'hidden',
+                'qty' => 0.0,
+                'is_salable' => false,
+                'is_in_stock' => false,
+                'stock_status' => 'out_of_stock',
+                'source_updated_at' => $sourceUpdatedAt,
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $offer
+     * @return array<string, mixed>
+     */
+    private function priceStateFromOffer(array $offer): array
+    {
+        $prices = (array)($offer['prices'] ?? []);
+        return [
+            'price' => array_key_exists('old', $prices) && $prices['old'] !== null ? (float)$prices['old'] : null,
+            'special_price' => array_key_exists('special_price', $prices) && $prices['special_price'] !== null ? (float)$prices['special_price'] : null,
+            'special_from_date' => (string)($prices['special_from_date'] ?? ''),
+            'special_to_date' => (string)($prices['special_to_date'] ?? ''),
+            'tier_prices' => [],
+            'group_prices' => [],
+            'currency_code' => (string)($prices['currency'] ?? ''),
+            'current' => array_key_exists('current', $prices) && $prices['current'] !== null ? (float)$prices['current'] : null,
+            'source' => (string)($prices['source'] ?? 'direct_sql_eav'),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $offer
+     * @return array<string, mixed>
+     */
+    private function availabilityStateFromOffer(array $offer): array
+    {
+        return [
+            'is_in_stock' => (bool)($offer['is_in_stock'] ?? false),
+            'is_salable' => (bool)($offer['is_salable'] ?? false),
+            'qty' => (float)($offer['qty'] ?? 0.0),
+            'manage_stock' => (bool)($offer['manage_stock'] ?? true),
+            'backorders' => (int)($offer['backorders'] ?? 0),
+            'stock_status' => (string)($offer['stock_status'] ?? 'out_of_stock'),
+            'availability' => (string)($offer['availability'] ?? 'out_of_stock'),
+            'source' => 'direct_sql_inventory',
         ];
     }
 
@@ -166,46 +237,6 @@ class ProductStateBuilder
         }
 
         return $result;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function buildPriceState(Product $product, string $storeCode): array
-    {
-        $state = [
-            'price' => (float)$product->getData('price'),
-            'special_price' => $product->getData('special_price') !== null ? (float)$product->getData('special_price') : null,
-            'special_from_date' => (string)($product->getData('special_from_date') ?? ''),
-            'special_to_date' => (string)($product->getData('special_to_date') ?? ''),
-            'tier_prices' => [],
-            'group_prices' => [],
-            'currency_code' => (string)$this->storeManager->getStore($storeCode)->getCurrentCurrencyCode(),
-        ];
-
-        try {
-            foreach ((array)$product->getTierPrices() as $tierPrice) {
-                $state['tier_prices'][] = [
-                    'customer_group' => (string)$tierPrice->getCustomerGroupId(),
-                    'qty' => (float)$tierPrice->getQty(),
-                    'value' => (float)$tierPrice->getValue(),
-                ];
-            }
-        } catch (\Throwable) {
-            // keep empty tier prices
-        }
-
-        $groupPrices = $product->getData('group_price');
-        if (is_array($groupPrices)) {
-            foreach ($groupPrices as $groupPrice) {
-                $state['group_prices'][] = [
-                    'customer_group' => (string)($groupPrice['cust_group'] ?? $groupPrice['customer_group_id'] ?? ''),
-                    'value' => (float)($groupPrice['value'] ?? 0),
-                ];
-            }
-        }
-
-        return $state;
     }
 
     /**

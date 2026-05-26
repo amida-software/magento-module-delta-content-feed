@@ -61,6 +61,7 @@ message ProductState {
   AvailabilityState availability = 5;
   bool deleted = 6;
   CuratedProductState curated = 7;
+  OfferState offer = 8;
 }
 
 message AttributeValue {
@@ -94,6 +95,8 @@ message PriceState {
   repeated TierPrice tier_prices = 5;
   repeated GroupPrice group_prices = 6;
   string currency_code = 7;
+  double current_price = 8;
+  string source = 9;
 }
 
 message TierPrice {
@@ -114,6 +117,8 @@ message AvailabilityState {
   bool manage_stock = 4;
   int32 backorders = 5;
   string stock_status = 6;
+  string availability = 7;
+  string source = 8;
 }
 
 message CuratedProductState {
@@ -151,10 +156,116 @@ message RelatedProduct {
   sint32 position = 5;
 }
 
+
+message OfferState {
+  uint64 product_id = 1;
+  string sku = 2;
+  uint64 parent_product_id = 3;
+  string parent_sku = 4;
+  string magento_type_id = 5;
+  OfferPriceState prices = 6;
+  string availability = 7;
+  double qty = 8;
+  bool is_salable = 9;
+  bool is_in_stock = 10;
+  string stock_status = 11;
+  bool manage_stock = 12;
+  int32 backorders = 13;
+  string source_updated_at = 14;
+  string source = 15;
+}
+
+message OfferPriceState {
+  double old_price = 1;
+  double current_price = 2;
+  string currency_code = 3;
+  double special_price = 4;
+  string special_from_date = 5;
+  string special_to_date = 6;
+  string source = 7;
+}
+
+message CategoryFeedEnvelope {
+  uint32 schema_version = 1;
+  string stream = 2;
+  string store_code = 3;
+  uint64 from_event_id = 4;
+  uint64 to_event_id = 5;
+  bool has_more = 6;
+  bool cursor_expired = 7;
+  repeated CategoryFeedItem items = 8;
+  repeated Diagnostic diagnostics = 9;
+}
+
+message CategoryFeedItem {
+  uint64 event_id = 1;
+  string stream = 2;
+  uint64 category_id = 3;
+  string store_code = 4;
+  EventType event_type = 5;
+  repeated string changed_fields = 6;
+  string source_updated_at = 7;
+  string emitted_at = 8;
+  uint32 payload_version = 9;
+  string payload_hash = 10;
+  CategoryPayload payload = 11;
+}
+
+message CategorySnapshotEnvelope {
+  uint32 schema_version = 1;
+  string stream = 2;
+  string store_code = 3;
+  uint64 from_state_id = 4;
+  uint64 to_state_id = 5;
+  bool has_more = 6;
+  uint64 changes_highwater_event_id = 7;
+  repeated CategorySnapshotItem items = 8;
+  repeated Diagnostic diagnostics = 9;
+}
+
+message CategorySnapshotItem {
+  uint64 state_id = 1;
+  uint64 category_id = 2;
+  string stream = 3;
+  string store_code = 4;
+  string updated_at = 5;
+  string state_hash = 6;
+  CategoryPayload payload = 7;
+}
+
+message CategoryPayload {
+  bool enabled = 1;
+  bool deleted = 2;
+  CategoryEntityState category = 3;
+}
+
+message CategoryEntityState {
+  uint64 category_id = 1;
+  string external_id = 2;
+  bool enabled = 3;
+  string store_code = 4;
+  uint64 parent_id = 5;
+  string path = 6;
+  uint32 level = 7;
+  sint32 position = 8;
+  string url_key = 9;
+  string url_path = 10;
+  string url = 11;
+  string name = 12;
+  string title = 13;
+  string description = 14;
+  string meta_title = 15;
+  string meta_description = 16;
+  bool include_in_menu = 17;
+  string source_updated_at = 18;
+}
+
 message Diagnostic {
   string code = 1;
   string message = 2;
   uint64 event_id = 3;
+  string sku = 4;
+  uint64 category_id = 5;
 }
 
 enum EventType {

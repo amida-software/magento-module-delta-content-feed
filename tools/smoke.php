@@ -79,4 +79,78 @@ if ($curatedBlob === '' || !str_contains($curatedBlob, 'SKU-1')) {
     exit(1);
 }
 
+$offerBlob = $feed->encodeSnapshotEnvelope([
+    'schema_version' => 1,
+    'stream' => 'offer',
+    'store_code' => 'default',
+    'from_state_id' => 0,
+    'to_state_id' => 2,
+    'has_more' => false,
+    'changes_highwater_event_id' => 2,
+], [[
+    'state_id' => 2,
+    'product_id' => 2,
+    'sku' => 'SKU-OFFER',
+    'stream' => 'offer',
+    'store_code' => 'default',
+    'payload' => [
+        'enabled' => true,
+        'deleted' => false,
+        'offer' => [
+            'product_id' => 2,
+            'sku' => 'SKU-OFFER',
+            'prices' => [
+                'old' => 120.0,
+                'current' => 99.0,
+                'currency' => 'EUR',
+                'source' => 'direct_sql_eav',
+            ],
+            'availability' => 'in_stock',
+            'qty' => 4.0,
+            'is_salable' => true,
+            'is_in_stock' => true,
+            'stock_status' => 'in_stock',
+            'manage_stock' => true,
+            'backorders' => 0,
+        ],
+    ],
+]]);
+if ($offerBlob === '' || !str_contains($offerBlob, 'SKU-OFFER')) {
+    fwrite(STDERR, "Offer feed encoder smoke test failed\n");
+    exit(1);
+}
+
+$categoryBlob = $feed->encodeCategorySnapshotEnvelope([
+    'schema_version' => 1,
+    'stream' => 'categories',
+    'store_code' => 'default',
+    'from_state_id' => 0,
+    'to_state_id' => 3,
+    'has_more' => false,
+    'changes_highwater_event_id' => 3,
+], [[
+    'state_id' => 3,
+    'category_id' => 10,
+    'stream' => 'categories',
+    'store_code' => 'default',
+    'payload' => [
+        'enabled' => true,
+        'deleted' => false,
+        'category' => [
+            'category_id' => 10,
+            'store_code' => 'default',
+            'parent_id' => 2,
+            'url' => 'https://example.test/cat.html',
+            'name' => 'Perfume',
+            'title' => 'Perfume title',
+            'description' => 'Category description',
+        ],
+    ],
+]]);
+if ($categoryBlob === '' || !str_contains($categoryBlob, 'Perfume')) {
+    fwrite(STDERR, "Category feed encoder smoke test failed\n");
+    exit(1);
+}
+
+
 echo "Smoke OK\n";

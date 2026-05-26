@@ -64,3 +64,8 @@ Magento saves, mass attribute updates, category assignments and stock updates en
 
 - Unit tests cover canonicalization, diffs, lifecycle, batching, monopoly-request locking and first-run snapshot bootstrap.
 - Integration/controller tests dispatch real Magento routes and assert headers/body/health JSON.
+
+
+## Offer/category SQL extension
+
+See `docs/OFFER_CATEGORIES_SQL_SPEC.md` and `docs/AGENT_CHECKLIST_SQL_OFFER_CATEGORIES.md`. Price and stock for `offer` are built from Magento source tables during dirty processing/snapshot rebuild; public endpoints continue reading module event/state tables.

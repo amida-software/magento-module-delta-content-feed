@@ -19,7 +19,6 @@ class CuratedProductBuilderTest extends TestCase
         $product->method('getSku')->willReturn('SKU-10');
         $product->method('getTypeId')->willReturn('simple');
         $product->method('getPrice')->willReturn(1200.0);
-        $product->method('getFinalPrice')->willReturn(950.0);
         $product->method('getData')->willReturnCallback(static function (string $code): mixed {
             return [
                 'name' => 'Idole',
@@ -71,12 +70,20 @@ class CuratedProductBuilderTest extends TestCase
 
         $builder = new CuratedProductBuilder($categoryProvider, $imageUrlBuilder, $relatedProductProvider);
         $payload = $builder->build($product, 'ua', [
-            'is_in_stock' => false,
-            'is_salable' => true,
-            'qty' => 5.0,
-            'manage_stock' => true,
-            'backorders' => 0,
-            'stock_status' => 'in_stock',
+            'offer' => [
+                'prices' => [
+                    'old' => 1200.0,
+                    'current' => 950.0,
+                ],
+            ],
+            'availability' => [
+                'is_in_stock' => false,
+                'is_salable' => true,
+                'qty' => 5.0,
+                'manage_stock' => true,
+                'backorders' => 0,
+                'stock_status' => 'in_stock',
+            ],
         ]);
 
         self::assertSame([

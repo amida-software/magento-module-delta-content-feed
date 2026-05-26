@@ -110,4 +110,67 @@ class SnapshotServiceTest extends TestCase
         self::assertSame('pb-empty', $result['body']);
         self::assertSame('15', $result['headers']['X-Amida-To-State-Id']);
     }
+    public function testSkuSnapshotCanEmbedCurrentOfferState(): void
+    {
+        $this->config->method('getCandidateLimit')->willReturn(50);
+        $this->config->method('getMaxBatchSizeBytes')->willReturn(4096);
+        $this->stateSnapshot->expects(self::once())->method('count')->willReturn(1);
+        $this->snapshotRebuilder->expects(self::never())->method('rebuild');
+        $this->stateSnapshot->expects(self::once())
+            ->method('fetchSnapshotRowsBySkus')
+            ->with('content', 'default', ['SKU-1'], 1)
+            ->willReturn([[
+                'state_id' => 10,
+                'entity_id' => 100,
+                'sku' => 'SKU-1',
+                'updated_at' => '2026-05-25 12:00:00',
+                'state_hash' => 'content-hash',
+                'state_json' => '{"enabled":true,"attributes":[],"deleted":false}',
+            ]]);
+        $this->stateSnapshot->expects(self::once())
+            ->method('fetchStateMapBySkus')
+            ->with('offer', 'default', ['SKU-1'])
+            ->willReturn([
+                'SKU-1' => [
+                    'state' => [
+                        'offer' => [
+                            'sku' => 'SKU-1',
+                            'prices' => ['old' => 100.0, 'current' => 80.0, 'currency' => 'EUR'],
+                            'availability' => 'in_stock',
+                            'qty' => 5.0,
+                        ],
+                    ],
+                ],
+            ]);
+        $this->changeLog->method('getLastEventId')->willReturn(99);
+        $this->encoder->expects(self::once())
+            ->method('encodeSnapshotEnvelope')
+            ->willReturnCallback(function (array $meta, array $items, array $diagnostics): string {
+                self::assertSame('content', $meta['stream']);
+                self::assertSame([], $diagnostics);
+                self::assertSame('SKU-1', $items[0]['payload']['offer']['sku'] ?? null);
+                self::assertSame(80.0, $items[0]['payload']['offer']['prices']['current'] ?? null);
+                return 'pb-with-offer';
+            });
+        $this->compressor->method('compress')->willReturnCallback(static fn (string $payload): string => $payload);
+        $this->compressor->method('isEnabled')->willReturn(false);
+
+        $service = new SnapshotService(
+            $this->config,
+            $this->stateSnapshot,
+            $this->changeLog,
+            $this->encoder,
+            $this->compressor,
+            $this->snapshotRebuilder
+        );
+
+        $result = $service->build('content', 'default', 0, [
+            'skus' => ['SKU-1'],
+            'include_offer' => true,
+        ]);
+
+        self::assertSame('pb-with-offer', $result['body']);
+        self::assertSame('sku_lookup', $result['headers']['X-Amida-Mode']);
+    }
+
 }

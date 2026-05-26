@@ -27,6 +27,8 @@
                 <price_enabled>1</price_enabled>
                 <availability_enabled>1</availability_enabled>
                 <category_enabled>1</category_enabled>
+                <offer_enabled>1</offer_enabled>
+                <categories_enabled>1</categories_enabled>
                 <curated_enabled>1</curated_enabled>
                 <all_enabled>1</all_enabled>
             </streams>
@@ -38,6 +40,9 @@
                 <suppress_while_disabled>1</suppress_while_disabled>
                 <reemit_full_on_enable>1</reemit_full_on_enable>
                 <export_deleted_as_tombstone>1</export_deleted_as_tombstone>
+                <sku_filter_get_limit>200</sku_filter_get_limit>
+                <sku_filter_post_limit>5000</sku_filter_post_limit>
+                <date_filter_max_days>31</date_filter_max_days>
             </runtime>
             <stores>
                 <codes></codes>

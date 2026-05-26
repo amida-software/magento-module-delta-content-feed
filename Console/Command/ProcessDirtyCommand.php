@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Amida\ProductDeltaFeed\Console\Command;
 
+use Amida\ProductDeltaFeed\Model\Category\CategoryChangeProcessor;
 use Amida\ProductDeltaFeed\Model\Change\ChangeProcessor;
 use Amida\ProductDeltaFeed\Model\Config;
 use Symfony\Component\Console\Command\Command;
@@ -13,6 +14,7 @@ class ProcessDirtyCommand extends Command
 {
     public function __construct(
         private readonly ChangeProcessor $changeProcessor,
+        private readonly CategoryChangeProcessor $categoryChangeProcessor,
         private readonly Config $config
     ) {
         parent::__construct();
@@ -21,13 +23,15 @@ class ProcessDirtyCommand extends Command
     protected function configure(): void
     {
         $this->setName('amidafeed:process-dirty')
-            ->setDescription('Process a batch of product delta dirty rows');
+            ->setDescription('Process a batch of product and category delta dirty rows');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $processed = $this->changeProcessor->processBatch($this->config->getDirtyBatchSize());
-        $output->writeln('<info>Processed dirty rows:</info> ' . $processed);
+        $productProcessed = $this->changeProcessor->processBatch($this->config->getDirtyBatchSize());
+        $categoryProcessed = $this->categoryChangeProcessor->processBatch($this->config->getDirtyBatchSize());
+        $output->writeln('<info>Processed product dirty rows:</info> ' . $productProcessed);
+        $output->writeln('<info>Processed category dirty rows:</info> ' . $categoryProcessed);
         return self::SUCCESS;
     }
 }

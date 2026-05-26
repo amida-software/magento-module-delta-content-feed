@@ -6,6 +6,7 @@ namespace Amida\ProductDeltaFeed\Model\Feed;
 use Amida\ProductDeltaFeed\Model\Config;
 use Amida\ProductDeltaFeed\Model\ResourceModel\ChangeLog;
 use Amida\ProductDeltaFeed\Model\ResourceModel\DeadLetter;
+use Amida\ProductDeltaFeed\Model\ResourceModel\StateSnapshot;
 
 class ChangesService
 {
@@ -13,12 +14,14 @@ class ChangesService
         private readonly Config $config,
         private readonly ChangeLog $changeLog,
         private readonly DeadLetter $deadLetter,
+        private readonly StateSnapshot $stateSnapshot,
         private readonly FeedEncoder $encoder,
         private readonly ZstdCompressor $compressor
     ) {
     }
 
-    public function build(string $stream, string $storeCode, int $afterEventId): array
+    /** @param array<string, mixed> $filters */
+    public function build(string $stream, string $storeCode, int $afterEventId, array $filters = []): array
     {
         $oldest = $this->changeLog->getOldestRetainedEventId();
         $last = $this->changeLog->getLastEventId();
@@ -40,7 +43,17 @@ class ChangesService
             return $this->response($stream, $storeCode, $afterEventId, $afterEventId, false, $encoded, $body, true);
         }
 
-        $candidateRows = $this->changeLog->fetchChanges($stream, $storeCode, $afterEventId, $this->config->getCandidateLimit());
+        $includeOffer = (bool)($filters['include_offer'] ?? false);
+        $candidateRows = $this->changeLog->fetchChanges(
+            $stream,
+            $storeCode,
+            $afterEventId,
+            $this->config->getCandidateLimit(),
+            (string)($filters['changed_from'] ?? ''),
+            (string)($filters['changed_to'] ?? ''),
+            (array)($filters['skus'] ?? [])
+        );
+        $offerMap = $includeOffer ? $this->loadOfferMap($candidateRows, $storeCode) : [];
         $accepted = [];
         $diagnostics = [];
         $toEventId = $afterEventId;
@@ -51,7 +64,7 @@ class ChangesService
         $hardSingleLimit = $this->config->getHardSingleItemLimitBytes();
 
         foreach ($candidateRows as $row) {
-            $decodedItem = $this->rowToItem($row);
+            $decodedItem = $this->rowToItem($row, $includeOffer, $offerMap);
             $trialItems = array_merge($accepted, [$decodedItem]);
             $trialEncoded = $this->encoder->encodeChangesEnvelope([
                 'schema_version' => 1,
@@ -149,8 +162,21 @@ class ChangesService
         ];
     }
 
-    private function rowToItem(array $row): array
+    /**
+     * @param array<string, array<string, mixed>> $offerMap
+     */
+    private function rowToItem(array $row, bool $includeOffer = false, array $offerMap = []): array
     {
+        $payload = json_decode((string)$row['payload_json'], true) ?: [];
+        $payloadHash = (string)($row['payload_hash'] ?? '');
+        if ($includeOffer && (string)$row['stream_code'] !== Config::STREAM_OFFER) {
+            $offerState = $offerMap[(string)$row['sku']]['state'] ?? null;
+            if (is_array($offerState) && isset($offerState['offer'])) {
+                $payload['offer'] = $offerState['offer'];
+                $payloadHash = $this->hashPayload($payload);
+            }
+        }
+
         return [
             'event_id' => (int)$row['event_id'],
             'stream' => (string)$row['stream_code'],
@@ -163,8 +189,46 @@ class ChangesService
             'source_updated_at' => (string)($row['source_updated_at'] ?? ''),
             'emitted_at' => (string)($row['created_at'] ?? ''),
             'payload_version' => (int)($row['payload_version'] ?? 1),
-            'payload_hash' => (string)($row['payload_hash'] ?? ''),
-            'payload' => json_decode((string)$row['payload_json'], true) ?: [],
+            'payload_hash' => $payloadHash,
+            'payload' => $payload,
         ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<string, array<string, mixed>>
+     */
+    private function loadOfferMap(array $rows, string $storeCode): array
+    {
+        $skus = [];
+        foreach ($rows as $row) {
+            $sku = trim((string)($row['sku'] ?? ''));
+            if ($sku !== '') {
+                $skus[] = $sku;
+            }
+        }
+        return $this->stateSnapshot->fetchStateMapBySkus('offer', $storeCode, $skus);
+    }
+
+    /** @param mixed $payload */
+    private function hashPayload(mixed $payload): string
+    {
+        $payload = $this->sortRecursively($payload);
+        return hash('sha256', json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function sortRecursively(mixed $value): mixed
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+        $isList = array_keys($value) === range(0, count($value) - 1);
+        if (!$isList) {
+            ksort($value);
+        }
+        foreach ($value as $key => $child) {
+            $value[$key] = $this->sortRecursively($child);
+        }
+        return $value;
     }
 }

@@ -14,7 +14,9 @@ class Config
     public const STREAM_PRICE = 'price';
     public const STREAM_AVAILABILITY = 'availability';
     public const STREAM_CATEGORY = 'category';
+    public const STREAM_CATEGORIES = 'categories';
     public const STREAM_CURATED = 'curated';
+    public const STREAM_OFFER = 'offer';
     public const STREAM_ALL = 'all';
 
     public const XML_PATH_ENABLED = 'amida_productdeltafeed/general/enabled';
@@ -30,6 +32,8 @@ class Config
     public const XML_PATH_DIRTY_BATCH_SIZE = 'amida_productdeltafeed/general/dirty_batch_size';
     public const XML_PATH_RECONCILE_BATCH_SIZE = 'amida_productdeltafeed/general/reconcile_batch_size';
     public const XML_PATH_REPAIR_SCAN_BATCH_SIZE = 'amida_productdeltafeed/general/repair_scan_batch_size';
+    public const XML_PATH_SKU_FILTER_GET_LIMIT = 'amida_productdeltafeed/runtime/sku_filter_get_limit';
+    public const XML_PATH_SKU_FILTER_POST_LIMIT = 'amida_productdeltafeed/runtime/sku_filter_post_limit';
     public const XML_PATH_RETENTION_DAYS = 'amida_productdeltafeed/general/retention_days';
     public const XML_PATH_LAST_RECONCILE_PRODUCT_ID = 'amida_productdeltafeed/general/last_reconcile_product_id';
     public const XML_PATH_LAST_RECONCILE_RUN_AT = 'amida_productdeltafeed/general/last_reconcile_run_at';
@@ -39,6 +43,7 @@ class Config
     public const XML_PATH_SUPPRESS_WHILE_DISABLED = 'amida_productdeltafeed/runtime/suppress_while_disabled';
     public const XML_PATH_REEMIT_FULL_ON_ENABLE = 'amida_productdeltafeed/runtime/reemit_full_on_enable';
     public const XML_PATH_EXPORT_TOMBSTONE = 'amida_productdeltafeed/runtime/export_deleted_as_tombstone';
+    public const XML_PATH_DATE_FILTER_MAX_DAYS = 'amida_productdeltafeed/runtime/date_filter_max_days';
 
     private const STREAM_PATHS = [
         self::STREAM_CONTENT => 'amida_productdeltafeed/streams/content_enabled',
@@ -46,7 +51,9 @@ class Config
         self::STREAM_PRICE => 'amida_productdeltafeed/streams/price_enabled',
         self::STREAM_AVAILABILITY => 'amida_productdeltafeed/streams/availability_enabled',
         self::STREAM_CATEGORY => 'amida_productdeltafeed/streams/category_enabled',
+        self::STREAM_CATEGORIES => 'amida_productdeltafeed/streams/categories_enabled',
         self::STREAM_CURATED => 'amida_productdeltafeed/streams/curated_enabled',
+        self::STREAM_OFFER => 'amida_productdeltafeed/streams/offer_enabled',
         self::STREAM_ALL => 'amida_productdeltafeed/streams/all_enabled',
     ];
 
@@ -153,6 +160,16 @@ class Config
     public function getRetentionDays(?string $scopeCode = null): int
     {
         return max(1, (int)$this->getValue(self::XML_PATH_RETENTION_DAYS, $scopeCode, 30));
+    }
+
+    public function getSkuFilterGetLimit(?string $scopeCode = null): int
+    {
+        return max(1, (int)$this->getValue(self::XML_PATH_SKU_FILTER_GET_LIMIT, $scopeCode, 200));
+    }
+
+    public function getSkuFilterPostLimit(?string $scopeCode = null): int
+    {
+        return max($this->getSkuFilterGetLimit($scopeCode), (int)$this->getValue(self::XML_PATH_SKU_FILTER_POST_LIMIT, $scopeCode, 5000));
     }
 
     public function getLastReconcileProductId(?string $scopeCode = null): int
@@ -286,6 +303,14 @@ class Config
     {
         return $this->isFlag(self::XML_PATH_EXPORT_TOMBSTONE);
     }
+
+
+
+    public function getDateFilterMaxDays(?string $scopeCode = null): int
+    {
+        return max(1, (int)$this->getValue(self::XML_PATH_DATE_FILTER_MAX_DAYS, $scopeCode, 31));
+    }
+
 
     public function includeCategoryNames(): bool
     {
