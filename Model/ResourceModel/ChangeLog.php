@@ -28,8 +28,15 @@ class ChangeLog
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function fetchChanges(string $stream, string $storeCode, int $afterEventId, int $limit): array
-    {
+    public function fetchChanges(
+        string $stream,
+        string $storeCode,
+        int $afterEventId,
+        int $limit,
+        ?string $changedFrom = null,
+        ?string $changedTo = null,
+        array $skus = []
+    ): array {
         $connection = $this->resourceConnection->getConnection();
         $select = $connection->select()
             ->from($this->getTable())
@@ -38,6 +45,17 @@ class ChangeLog
             ->where('event_id > ?', $afterEventId)
             ->order('event_id ASC')
             ->limit($limit);
+
+        if ($changedFrom !== null && $changedFrom !== '') {
+            $select->where('created_at >= ?', $changedFrom);
+        }
+        if ($changedTo !== null && $changedTo !== '') {
+            $select->where('created_at < ?', $changedTo);
+        }
+        $skus = $this->normalizeSkus($skus);
+        if ($skus !== []) {
+            $select->where('sku IN (?)', $skus);
+        }
 
         return $connection->fetchAll($select);
     }
@@ -71,6 +89,15 @@ class ChangeLog
             ->from($this->getTable(), ['stream_code', 'cnt' => 'COUNT(*)'])
             ->group('stream_code');
         return $connection->fetchPairs($select);
+    }
+
+    /**
+     * @param string[] $skus
+     * @return string[]
+     */
+    private function normalizeSkus(array $skus): array
+    {
+        return array_values(array_filter(array_unique(array_map(static fn (mixed $sku): string => trim((string)$sku), $skus)), static fn (string $sku): bool => $sku !== ''));
     }
 
     private function getTable(): string

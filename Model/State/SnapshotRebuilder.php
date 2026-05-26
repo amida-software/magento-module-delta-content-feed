@@ -10,7 +10,7 @@ use Amida\ProductDeltaFeed\Model\ResourceModel\StateSnapshot;
 
 class SnapshotRebuilder
 {
-    private const PRODUCT_STREAMS = ['content', 'seo', 'price', 'availability', 'category', 'curated'];
+    private const PRODUCT_STREAMS = ['content', 'seo', 'price', 'availability', 'offer', 'category', 'curated'];
 
     public function __construct(
         private readonly Config $config,
@@ -79,6 +79,8 @@ class SnapshotRebuilder
 
         if ($stream === 'curated') {
             $payload['curated'] = [];
+        } elseif ($stream === 'offer') {
+            $payload['offer'] = [];
         } else {
             $payload['attributes'] = [];
         }

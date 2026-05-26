@@ -29,6 +29,8 @@ abstract class AbstractFeedControllerTest extends AbstractController
         $this->configWriter->save(Config::XML_PATH_API_REQUEST_MONOPOLY_ENABLED, 0);
         $this->configWriter->save(Config::XML_PATH_PUBLIC_KEY, 'integration-key');
         $this->configWriter->save(Config::XML_PATH_ZSTD_ENABLED, 0);
+        $this->configWriter->save(Config::XML_PATH_STORE_ENDPOINT_ENABLED, 1);
+        $this->configWriter->save('amida_productdeltafeed/streams/attributes_enabled', 1);
         $this->cacheTypeList->cleanType('config');
         $this->truncateTables();
     }
@@ -42,7 +44,7 @@ abstract class AbstractFeedControllerTest extends AbstractController
     protected function truncateTables(): void
     {
         $connection = $this->resourceConnection->getConnection();
-        foreach (['amida_product_delta_dirty', 'amida_product_delta_event', 'amida_product_delta_state', 'amida_product_delta_dead_letter'] as $table) {
+        foreach (['amida_product_delta_dirty', 'amida_product_delta_event', 'amida_product_delta_state', 'amida_product_delta_dead_letter', 'amida_product_delta_category_dirty', 'amida_product_delta_category_event', 'amida_product_delta_category_state'] as $table) {
             $connection->delete($this->resourceConnection->getTableName($table));
         }
     }
