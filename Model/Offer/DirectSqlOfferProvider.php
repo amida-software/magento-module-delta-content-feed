@@ -104,8 +104,6 @@ class DirectSqlOfferProvider
         $parent = $this->resolveParent($productId);
         $isEnabled = $enabled ?? $this->isProductEnabled($linkId, $storeId);
 
-        $availability = $this->availabilityCode($isEnabled, $stock);
-
         return [
             'enabled' => $isEnabled,
             'deleted' => false,
@@ -124,11 +122,8 @@ class DirectSqlOfferProvider
                     'special_to_date' => $specialTo,
                     'source' => 'direct_sql_eav',
                 ],
-                'availability' => $availability,
                 'qty' => $stock['qty'],
                 'is_salable' => $stock['is_salable'],
-                'is_in_stock' => $stock['is_in_stock'],
-                'stock_status' => $stock['stock_status'],
                 'manage_stock' => $stock['manage_stock'],
                 'backorders' => $stock['backorders'],
                 'source' => (string)($stock['source'] ?? 'direct_sql_inventory'),
@@ -356,17 +351,6 @@ class DirectSqlOfferProvider
         );
 
         return ['product_id' => $parentId, 'sku' => $parentSku ? (string)$parentSku : null];
-    }
-
-    private function availabilityCode(bool $enabled, array $stock): string
-    {
-        if (!$enabled) {
-            return 'hidden';
-        }
-        if ((bool)$stock['is_salable']) {
-            return (float)$stock['qty'] > 0.0 ? 'in_stock' : 'preorder';
-        }
-        return 'out_of_stock';
     }
 
     private function getProductDecimalValue(int $linkId, string $attributeCode, int $storeId): ?float

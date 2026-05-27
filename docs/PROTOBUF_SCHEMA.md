@@ -13,7 +13,7 @@ The module implements its own tiny protobuf encoder so the hot feed path does no
 - `price`
 - `availability`
 - `category` — product/category assignments
-- `offer` — direct-SQL price + stock + salability by SKU
+- `offer` — direct-SQL price + qty + salability by SKU
 - `curated`
 - `all`
 
@@ -28,6 +28,10 @@ The module implements its own tiny protobuf encoder so the hot feed path does no
 
 - `availability = 7`
 - `source = 8`
+
+`OfferState` intentionally does not duplicate string stock status fields. Field numbers `7`, `10` and `11`
+are reserved for the removed `availability`, `is_in_stock` and `stock_status` offer fields; use the
+dedicated `availability` stream for normalized stock-status text.
 
 ## Category dictionary stream
 

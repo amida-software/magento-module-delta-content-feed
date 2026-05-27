@@ -7,7 +7,7 @@ Installable Magento 2 module that publishes product deltas over public HTTP endp
 - Maintains its own append-only product change log.
 - Publishes streams: `content`, `seo`, `price`, `availability`, `category`, `offer`, `curated`, `all`, plus `categories` for the category dictionary.
 - Adds a consumer-friendly `curated` product stream with full product documents: SKU, old/new price, simple availability, name, description, full image URLs, brand, product type, category IDs, notes and related products.
-- Adds direct-SQL `offer` export for price, salability, availability and qty from Magento source DB tables, not price/stock indexes.
+- Adds direct-SQL `offer` export for price, salability and qty from Magento source DB tables, not price/stock indexes.
 - Adds `categories` dictionary export with category tree/content metadata.
 - Uses a monotonic `event_id` cursor.
 - Stores normalized per-product per-store per-stream state snapshots.

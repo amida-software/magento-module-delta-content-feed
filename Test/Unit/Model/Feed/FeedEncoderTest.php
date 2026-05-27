@@ -170,6 +170,7 @@ class FeedEncoderTest extends TestCase
         self::assertStringContainsString('SKU-10', $offerEncoded);
         self::assertStringContainsString('EUR', $offerEncoded);
         self::assertStringContainsString('direct_sql_eav', $offerEncoded);
+        self::assertStringNotContainsString('in_stock', $offerEncoded);
         self::assertStringContainsString('Perfume', $categoryEncoded);
         self::assertStringContainsString('https://shop.test/perfume', $categoryEncoded);
     }

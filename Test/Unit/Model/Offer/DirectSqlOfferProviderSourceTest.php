@@ -24,4 +24,17 @@ class DirectSqlOfferProviderSourceTest extends TestCase
         self::assertStringNotContainsString('IsProductSalable', $source);
         self::assertStringNotContainsString('getFinalPrice', $source);
     }
+
+    public function testOfferPayloadDoesNotExposeRedundantStockStatusFields(): void
+    {
+        $offerProvider = (string)file_get_contents(__DIR__ . '/../../../../Model/Offer/DirectSqlOfferProvider.php');
+        $stateBuilder = (string)file_get_contents(__DIR__ . '/../../../../Model/State/ProductStateBuilder.php');
+
+        self::assertStringNotContainsString("'availability' => \$availability", $offerProvider);
+        self::assertStringNotContainsString("'is_in_stock' => \$stock['is_in_stock']", $offerProvider);
+        self::assertStringNotContainsString("'stock_status' => \$stock['stock_status']", $offerProvider);
+        self::assertStringNotContainsString("'availability' => \$enabled", $stateBuilder);
+        self::assertStringNotContainsString("'is_in_stock' => false", $stateBuilder);
+        self::assertStringNotContainsString("'stock_status' => 'out_of_stock'", $stateBuilder);
+    }
 }

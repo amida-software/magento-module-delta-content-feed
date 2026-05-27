@@ -418,20 +418,11 @@ class FeedEncoder
         if (!empty($offer['prices'])) {
             $payload .= $this->writer->message(6, $this->encodeOfferPrices((array)$offer['prices']));
         }
-        if (($offer['availability'] ?? '') !== '') {
-            $payload .= $this->writer->string(7, (string)$offer['availability']);
-        }
         if (isset($offer['qty'])) {
             $payload .= $this->writer->double(8, (float)$offer['qty']);
         }
         if (isset($offer['is_salable'])) {
             $payload .= $this->writer->bool(9, (bool)$offer['is_salable']);
-        }
-        if (isset($offer['is_in_stock'])) {
-            $payload .= $this->writer->bool(10, (bool)$offer['is_in_stock']);
-        }
-        if (($offer['stock_status'] ?? '') !== '') {
-            $payload .= $this->writer->string(11, (string)$offer['stock_status']);
         }
         if (isset($offer['manage_stock'])) {
             $payload .= $this->writer->bool(12, (bool)$offer['manage_stock']);

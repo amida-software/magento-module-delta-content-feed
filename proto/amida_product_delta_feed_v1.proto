@@ -158,17 +158,17 @@ message RelatedProduct {
 
 
 message OfferState {
+  reserved 7, 10, 11;
+  reserved "availability", "is_in_stock", "stock_status";
+
   uint64 product_id = 1;
   string sku = 2;
   uint64 parent_product_id = 3;
   string parent_sku = 4;
   string magento_type_id = 5;
   OfferPriceState prices = 6;
-  string availability = 7;
   double qty = 8;
   bool is_salable = 9;
-  bool is_in_stock = 10;
-  string stock_status = 11;
   bool manage_stock = 12;
   int32 backorders = 13;
   string source_updated_at = 14;

@@ -1181,7 +1181,7 @@ Endpoint чтения должен работать из:
 
 ## Addendum: offer/categories direct SQL extension
 
-See `docs/OFFER_CATEGORIES_SQL_SPEC.md`. The extension adds `offer` and `categories` streams, SKU/date filters, product `include_offer=1`, and direct SQL source-table extraction for offer price/availability.
+See `docs/SPEC_OFFER_CATEGORIES_SQL.md`. The extension adds `offer` and `categories` streams, SKU/date filters, product `include_offer=1`, and direct SQL source-table extraction for offer price/qty/salability.
 
 ---
 
@@ -1189,7 +1189,7 @@ See `docs/OFFER_CATEGORIES_SQL_SPEC.md`. The extension adds `offer` and `categor
 
 This implementation adds two delivery streams:
 
-- `offer` — current sellability state by SKU: price, availability, salable qty and parent SKU relation.
+- `offer` — current sellability state by SKU: price, salability, qty and parent SKU relation. Normalized stock status text remains in the dedicated `availability` stream, not in `offer`.
 - `categories` — category tree/dictionary, separate from the older product-category assignment stream `category`.
 
 ### 21.1. Direct SQL rule for `offer`

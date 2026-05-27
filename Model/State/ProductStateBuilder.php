@@ -44,7 +44,7 @@ class ProductStateBuilder
             ?: $this->fallbackOffer($productId, $sku, $storeCode, $enabled, $sourceUpdatedAt);
         $offerData = (array)($offer['offer'] ?? []);
         $price = $this->priceStateFromOffer($offerData);
-        $availability = $this->availabilityStateFromOffer($offerData);
+        $availability = $this->availabilityStateFromOffer($offerData, $enabled);
 
         return [
             'meta' => [
@@ -104,11 +104,8 @@ class ProductStateBuilder
                     'currency' => (string)$this->storeManager->getStore($storeCode)->getCurrentCurrencyCode(),
                     'source' => 'direct_sql_fallback',
                 ],
-                'availability' => $enabled ? 'out_of_stock' : 'hidden',
                 'qty' => 0.0,
                 'is_salable' => false,
-                'is_in_stock' => false,
-                'stock_status' => 'out_of_stock',
                 'source_updated_at' => $sourceUpdatedAt,
             ],
         ];
@@ -138,18 +135,33 @@ class ProductStateBuilder
      * @param array<string, mixed> $offer
      * @return array<string, mixed>
      */
-    private function availabilityStateFromOffer(array $offer): array
+    private function availabilityStateFromOffer(array $offer, bool $enabled): array
     {
+        $qty = (float)($offer['qty'] ?? 0.0);
+        $isSalable = (bool)($offer['is_salable'] ?? false);
+        $isInStock = $enabled && $isSalable && $qty > 0.0;
+
         return [
-            'is_in_stock' => (bool)($offer['is_in_stock'] ?? false),
-            'is_salable' => (bool)($offer['is_salable'] ?? false),
-            'qty' => (float)($offer['qty'] ?? 0.0),
+            'is_in_stock' => $isInStock,
+            'is_salable' => $isSalable,
+            'qty' => $qty,
             'manage_stock' => (bool)($offer['manage_stock'] ?? true),
             'backorders' => (int)($offer['backorders'] ?? 0),
-            'stock_status' => (string)($offer['stock_status'] ?? 'out_of_stock'),
-            'availability' => (string)($offer['availability'] ?? 'out_of_stock'),
+            'stock_status' => ($isInStock || $isSalable) ? 'in_stock' : 'out_of_stock',
+            'availability' => $this->availabilityCode($enabled, $isSalable, $qty),
             'source' => 'direct_sql_inventory',
         ];
+    }
+
+    private function availabilityCode(bool $enabled, bool $isSalable, float $qty): string
+    {
+        if (!$enabled) {
+            return 'hidden';
+        }
+        if ($isSalable) {
+            return $qty > 0.0 ? 'in_stock' : 'preorder';
+        }
+        return 'out_of_stock';
     }
 
     /**

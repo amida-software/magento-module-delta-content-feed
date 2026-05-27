@@ -24,11 +24,8 @@
 - `prices.special_from_date`
 - `prices.special_to_date`
 - `prices.source`
-- `availability`
 - `qty`
 - `is_salable`
-- `is_in_stock`
-- `stock_status`
 - `manage_stock`
 - `backorders`
 - `source_updated_at`
@@ -134,7 +131,7 @@ MSI mode:
 - apply reservation delta from `inventory_reservation`
 - clamp exported qty to `>= 0`
 
-`availability` mapping:
+Dedicated `availability` stream mapping:
 
 - disabled product → `hidden`
 - salable with positive qty → `in_stock`
