@@ -71,6 +71,8 @@ GET /amidafeed/v1/attributes/key/<KEY>?store=<STORE>&codes=color,size
 GET /amidafeed/v1/snapshot/key/<KEY>/stream/attributes?store=<STORE>&codes=color,size
 ```
 
+The attributes dictionary defaults to schema v2: top-level `attributes` is keyed by attribute id, while `product_types` and `attribute_sets` contain relation trees with attribute id references only. Legacy `items[]` is returned only when `schema=v1` is requested explicitly. Store-code label maps are emitted for every filled store label, and only attributes assigned to used product attribute sets/groups with at least one non-empty product value are returned. Admin labels are emitted separately as `admin_label` only when they differ from localized store labels.
+
 See `docs/SPEC_STORE_ENDPOINT.md` and `docs/TESTING_STORE_ENDPOINT.md`.
 
 ## Development workflow

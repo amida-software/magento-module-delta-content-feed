@@ -208,17 +208,22 @@ Adapter output is treated as untrusted input and normalized by the core module.
 
 ## 10. Attributes dictionary endpoint
 
-The endpoint returns attribute metadata, not product values.
+The endpoint returns attribute metadata, not product values. Schema v2 is the default response shape for `/attributes` and `/snapshot/.../stream/attributes`; schema v1 is legacy and is returned only when `schema=v1` is explicitly requested. `load_options` defaults to true. `load_options=false` may be sent as a JSON boolean false, numeric `0`, or string `"0"`, `"false"`, `"no"`, or `"off"`; when disabled, attributes omit `options[]` everywhere and selectable attributes that have options expose `options_count` from a lightweight option count query.
+
+Default schema v2 example:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "entity": "attributes",
   "store_code": "default",
-  "items": [
-    {
+  "attributes": {
+    "93": {
+      "id": 93,
       "code": "color",
-      "label": "Color",
+      "label": "Colour",
+      "labels": {"ua": "Колір", "ru": "Цвет", "default": "Colour"},
+      "admin_label": "Color",
       "kind": "select",
       "unit": null,
       "is_filterable": true,
@@ -227,24 +232,67 @@ The endpoint returns attribute metadata, not product values.
       "is_visible_on_front": false,
       "is_required": false,
       "options": [
-        {"value": "12", "label": "Black"}
+        {"value": "12", "label": "Black", "labels": {"ua": "Чорний", "ru": "Черный", "default": "Black"}}
       ]
     }
+  },
+  "attribute_sets": [
+    {
+      "id": 4,
+      "name": "Default",
+      "groups": [
+        {"id": 7, "name": "Product Details", "attribute_ids": [93]}
+      ]
+    }
+  ],
+  "product_types": [
+    {"code": "simple", "label": "Simple Product", "attribute_ids": [93]}
   ],
   "diagnostics": []
 }
 ```
 
+With `load_options=0`, selectable attributes look like:
+
+```json
+{
+  "id": 93,
+  "code": "color",
+  "kind": "select",
+  "options_count": 24
+}
+```
+
+Legacy schema v1 (`schema=v1`) retains `items[]`, `product_types[].attribute_codes`, `product_count`, and `attribute_sets[].groups[].attribute_codes` for backward compatibility. New consumers should use schema v2; there is no default `items[]` in schema v2. Top-level `attributes` is a JSON object keyed by stringified attribute id because JSON object keys are strings, while relation arrays (`product_types[].attribute_ids` and `attribute_sets[].groups[].attribute_ids`) contain numeric JSON numbers. Schema v2 relation nodes intentionally contain only IDs and display labels/names, not embedded attribute objects or product counts.
+
+Filtering rules:
+
+- `product_types` contains product type codes that are present on products assigned to the requested store website and relations computed from `catalog_eav_attribute.apply_to` (`NULL`/empty means all product types).
+- `attribute_sets` contains only product attribute sets that are used by at least one product on the requested store website.
+- `attribute_sets[].groups[]` contains only groups that contain attributes included in the response.
+- Attributes contain only catalog-product EAV attributes that are assigned to one of those used attribute sets/groups and have at least one non-empty product value in the admin store or any active store view.
+- `attributes.*.labels` and `options[].labels` are keyed by Magento store code for every non-empty localized label available in `eav_attribute_label` / `eav_attribute_option_value`. `admin_label` is emitted only when the admin label is non-empty and differs from the localized labels.
+- `codes` still limits attributes by attribute code, after normalization and endpoint GET/POST limits.
+- Numeric zero is treated as a non-empty product value; null and blank text values are excluded.
+
+`format=json` on snapshot and changes endpoints returns `Content-Type: application/json` and a JSON envelope instead of protobuf bytes for product streams and category streams, including empty and cursor-expired responses.
+
 Auto source uses direct SQL over:
 
+- `catalog_product_entity`
+- `catalog_product_website`
 - `eav_entity_type`
 - `eav_attribute`
+- `eav_entity_attribute`
+- `eav_attribute_group`
+- `eav_attribute_set`
 - `catalog_eav_attribute`
 - `eav_attribute_label`
 - `eav_attribute_option`
 - `eav_attribute_option_value`
+- `catalog_product_entity_{varchar,int,text,decimal,datetime}`
 
-Admin enrichment is read from `attribute_metadata_json`, keyed by attribute code.
+Admin enrichment is read from `attribute_metadata_json`, keyed by attribute code. Railway validation should compare before/after endpoint timing because the dictionary now performs value-existence checks across EAV value tables.
 
 ## 11. Security
 

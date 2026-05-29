@@ -50,15 +50,15 @@ class Snapshot extends AbstractFeedAction
         }
 
         if ($stream === Config::STREAM_ATTRIBUTES) {
-            return $this->jsonResponse($this->attributeDictionaryService->build($storeCode, $this->parseCodes()));
-        }
-
-        if ($this->compressor->isEnabled() && !$this->compressor->isAvailable()) {
-            return $this->invalidResponse(503, 'zstd compression is enabled but ext-zstd is not installed');
+            return $this->jsonResponse($this->attributeDictionaryService->build($storeCode, $this->parseCodes(), $this->parseLoadOptions(), $this->parseSchemaVersion()));
         }
 
         $afterStateId = max(0, (int)$this->getRequest()->getParam('after_state_id', 0));
         $filters = $this->buildQueryFilters();
+
+        if (empty($filters['_format_json']) && $this->compressor->isEnabled() && !$this->compressor->isAvailable()) {
+            return $this->invalidResponse(503, 'zstd compression is enabled but ext-zstd is not installed');
+        }
 
         if ($stream === Config::STREAM_CATEGORIES) {
             return $this->guardedRawResponse(
@@ -79,6 +79,7 @@ class Snapshot extends AbstractFeedAction
             'skus' => $this->parseStringList('skus', $body) ?: $this->parseStringList('sku', $body),
             'category_ids' => array_map('intval', $this->parseStringList('category_ids', $body) ?: $this->parseStringList('category_id', $body)),
             'include_offer' => (bool)(int)($body['include_offer'] ?? $this->getRequest()->getParam('include_offer', 0)),
+            '_format_json' => $this->parseFormatJson($body),
         ];
     }
 
@@ -106,6 +107,37 @@ class Snapshot extends AbstractFeedAction
             static fn (string $item): bool => $item !== ''
         ));
         return array_slice($parts, 0, $this->getRequest()->isPost() ? $this->config->getSkuFilterPostLimit() : $this->config->getSkuFilterGetLimit());
+    }
+
+    private function parseLoadOptions(): bool
+    {
+        $body = $this->readJsonBody();
+        $value = array_key_exists('load_options', $body) ? $body['load_options'] : $this->getRequest()->getParam('load_options', true);
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return (int)$value !== 0;
+        }
+        $normalized = strtolower(trim((string)$value));
+        if ($normalized === '') {
+            return true;
+        }
+        return !in_array($normalized, ['0', 'false', 'no', 'off'], true);
+    }
+
+    private function parseSchemaVersion(): int
+    {
+        $body = $this->readJsonBody();
+        $value = array_key_exists('schema', $body) ? $body['schema'] : $this->getRequest()->getParam('schema', '');
+        return strtolower(trim((string)$value)) === 'v1' || (string)$value === '1' ? 1 : 2;
+    }
+
+    /** @param array<string, mixed> $body */
+    private function parseFormatJson(array $body): bool
+    {
+        $value = array_key_exists('format', $body) ? $body['format'] : $this->getRequest()->getParam('format', '');
+        return strtolower(trim((string)$value)) === 'json';
     }
 
     /** @return array<string, mixed> */

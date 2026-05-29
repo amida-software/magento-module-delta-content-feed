@@ -23,6 +23,7 @@ class CategorySnapshotService
     /** @param array<string, mixed> $filters */
     public function build(string $storeCode, int $afterStateId, array $filters = []): array
     {
+        $formatJson = !empty($filters['_format_json']);
         if ($afterStateId <= 0 && $this->stateSnapshot->count() === 0) {
             $this->snapshotRebuilder->rebuild();
         }
@@ -49,7 +50,7 @@ class CategorySnapshotService
         foreach ($rows as $row) {
             $item = $this->rowToItem($row, $storeCode);
             $trialItems = array_merge($accepted, [$item]);
-            $trialEncoded = $this->encoder->encodeCategorySnapshotEnvelope([
+            $trialMeta = [
                 'schema_version' => 1,
                 'stream' => Config::STREAM_CATEGORIES,
                 'store_code' => $storeCode,
@@ -57,8 +58,11 @@ class CategorySnapshotService
                 'to_state_id' => $isCategoryLookup ? 0 : (int)$row['state_id'],
                 'has_more' => false,
                 'changes_highwater_event_id' => $highwaterEventId,
-            ], $trialItems, $diagnostics);
-            $trialCompressed = $this->compressor->compress($trialEncoded);
+            ];
+            $trialEncoded = $formatJson
+                ? $this->encodeJsonEnvelope($trialMeta, $trialItems, $diagnostics)
+                : $this->encoder->encodeCategorySnapshotEnvelope($trialMeta, $trialItems, $diagnostics);
+            $trialCompressed = $formatJson ? $trialEncoded : $this->compressor->compress($trialEncoded);
             if (strlen($trialCompressed) > $maxBytes) {
                 $hasMore = !$isCategoryLookup;
                 break;
@@ -72,7 +76,7 @@ class CategorySnapshotService
         }
 
         if ($encoded === null || $compressed === null) {
-            $encoded = $this->encoder->encodeCategorySnapshotEnvelope([
+            $meta = [
                 'schema_version' => 1,
                 'stream' => Config::STREAM_CATEGORIES,
                 'store_code' => $storeCode,
@@ -80,8 +84,11 @@ class CategorySnapshotService
                 'to_state_id' => $toStateId,
                 'has_more' => false,
                 'changes_highwater_event_id' => $highwaterEventId,
-            ], [], $diagnostics);
-            $compressed = $this->compressor->compress($encoded);
+            ];
+            $encoded = $formatJson
+                ? $this->encodeJsonEnvelope($meta, [], $diagnostics)
+                : $this->encoder->encodeCategorySnapshotEnvelope($meta, [], $diagnostics);
+            $compressed = $formatJson ? $encoded : $this->compressor->compress($encoded);
         }
 
         if (!$isCategoryLookup && !$hasMore && count($rows) === $candidateLimit) {
@@ -96,7 +103,8 @@ class CategorySnapshotService
             $isCategoryLookup,
             $highwaterEventId,
             $encoded,
-            $compressed
+            $compressed,
+            $formatJson
         );
     }
 
@@ -108,12 +116,13 @@ class CategorySnapshotService
         bool $isCategoryLookup,
         int $highwaterEventId,
         string $encoded,
-        string $body
+        string $body,
+        bool $formatJson = false
     ): array {
         return [
             'body' => $body,
             'headers' => [
-                'Content-Type' => 'application/x-protobuf',
+                'Content-Type' => $formatJson ? 'application/json' : 'application/x-protobuf',
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
                 'X-Amida-Schema-Version' => '1',
                 'X-Amida-Stream' => Config::STREAM_CATEGORIES,
@@ -124,8 +133,17 @@ class CategorySnapshotService
                 'X-Amida-Mode' => $isCategoryLookup ? 'category_lookup' : 'cursor_snapshot',
                 'X-Amida-Changes-Highwater-Event-Id' => (string)$highwaterEventId,
                 'X-Amida-Uncompressed-Length' => (string)strlen($encoded),
-            ] + ($this->compressor->isEnabled() ? ['Content-Encoding' => 'zstd'] : []),
+            ] + (!$formatJson && $this->compressor->isEnabled() ? ['Content-Encoding' => 'zstd'] : []),
         ];
+    }
+
+    /** @param array<string, mixed> $meta @param array<int, array<string, mixed>> $items @param array<int, array<string, mixed>> $diagnostics */
+    private function encodeJsonEnvelope(array $meta, array $items, array $diagnostics = []): string
+    {
+        return (string)json_encode($meta + [
+            'items' => $items,
+            'diagnostics' => $diagnostics,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     private function rowToItem(array $row, string $storeCode): array

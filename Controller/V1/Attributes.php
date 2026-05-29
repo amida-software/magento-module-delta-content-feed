@@ -43,7 +43,7 @@ class Attributes extends AbstractFeedAction
             return $this->invalidResponse(400, 'Invalid store code');
         }
 
-        return $this->jsonResponse($this->attributeDictionaryService->build($storeCode, $this->parseCodes()));
+        return $this->jsonResponse($this->attributeDictionaryService->build($storeCode, $this->parseCodes(), $this->parseLoadOptions(), $this->parseSchemaVersion()));
     }
 
     /** @return string[] */
@@ -54,6 +54,30 @@ class Attributes extends AbstractFeedAction
         $parts = is_array($value) ? $value : explode(',', (string)$value);
         $parts = array_values(array_filter(array_unique(array_map(static fn (mixed $item): string => trim((string)$item), $parts)), static fn (string $item): bool => $item !== ''));
         return array_slice($parts, 0, $this->getRequest()->isPost() ? $this->config->getSkuFilterPostLimit() : $this->config->getSkuFilterGetLimit());
+    }
+
+    private function parseLoadOptions(): bool
+    {
+        $body = $this->readJsonBody();
+        $value = array_key_exists('load_options', $body) ? $body['load_options'] : $this->getRequest()->getParam('load_options', true);
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return (int)$value !== 0;
+        }
+        $normalized = strtolower(trim((string)$value));
+        if ($normalized === '') {
+            return true;
+        }
+        return !in_array($normalized, ['0', 'false', 'no', 'off'], true);
+    }
+
+    private function parseSchemaVersion(): int
+    {
+        $body = $this->readJsonBody();
+        $value = array_key_exists('schema', $body) ? $body['schema'] : $this->getRequest()->getParam('schema', '');
+        return strtolower(trim((string)$value)) === 'v1' || (string)$value === '1' ? 1 : 2;
     }
 
     /** @return array<string, mixed> */

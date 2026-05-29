@@ -19,10 +19,15 @@ class CategoryChangesService
     /** @param array<string, mixed> $filters */
     public function build(string $storeCode, int $afterEventId, array $filters = []): array
     {
+        $formatJson = !empty($filters['_format_json']);
         $oldest = $this->changeLog->getOldestRetainedEventId();
         $cursorExpired = $afterEventId > 0 && $oldest > 0 && $afterEventId < $oldest;
         if ($cursorExpired) {
-            $encoded = $this->encoder->encodeCategoryChangesEnvelope([
+            $diagnostics = [[
+                'code' => 'cursor_expired',
+                'message' => 'Requested cursor is older than retained category events.',
+            ]];
+            $meta = [
                 'schema_version' => 1,
                 'stream' => Config::STREAM_CATEGORIES,
                 'store_code' => $storeCode,
@@ -30,12 +35,12 @@ class CategoryChangesService
                 'to_event_id' => $afterEventId,
                 'has_more' => false,
                 'cursor_expired' => true,
-            ], [], [[
-                'code' => 'cursor_expired',
-                'message' => 'Requested cursor is older than retained category events.',
-            ]]);
-            $body = $this->compressor->compress($encoded);
-            return $this->response($storeCode, $afterEventId, $afterEventId, false, $encoded, $body, true);
+            ];
+            $encoded = $formatJson
+                ? $this->encodeJsonEnvelope($meta, [], $diagnostics)
+                : $this->encoder->encodeCategoryChangesEnvelope($meta, [], $diagnostics);
+            $body = $formatJson ? $encoded : $this->compressor->compress($encoded);
+            return $this->response($storeCode, $afterEventId, $afterEventId, false, $encoded, $body, true, $formatJson);
         }
 
         $rows = $this->changeLog->fetchChanges(
@@ -57,7 +62,7 @@ class CategoryChangesService
         foreach ($rows as $row) {
             $item = $this->rowToItem($row, $storeCode);
             $trialItems = array_merge($accepted, [$item]);
-            $trialEncoded = $this->encoder->encodeCategoryChangesEnvelope([
+            $trialMeta = [
                 'schema_version' => 1,
                 'stream' => Config::STREAM_CATEGORIES,
                 'store_code' => $storeCode,
@@ -65,8 +70,11 @@ class CategoryChangesService
                 'to_event_id' => (int)$row['event_id'],
                 'has_more' => false,
                 'cursor_expired' => false,
-            ], $trialItems, $diagnostics);
-            $trialCompressed = $this->compressor->compress($trialEncoded);
+            ];
+            $trialEncoded = $formatJson
+                ? $this->encodeJsonEnvelope($trialMeta, $trialItems, $diagnostics)
+                : $this->encoder->encodeCategoryChangesEnvelope($trialMeta, $trialItems, $diagnostics);
+            $trialCompressed = $formatJson ? $trialEncoded : $this->compressor->compress($trialEncoded);
             if (strlen($trialCompressed) > $maxBytes) {
                 $hasMore = true;
                 break;
@@ -78,7 +86,7 @@ class CategoryChangesService
         }
 
         if ($encoded === null || $compressed === null) {
-            $encoded = $this->encoder->encodeCategoryChangesEnvelope([
+            $meta = [
                 'schema_version' => 1,
                 'stream' => Config::STREAM_CATEGORIES,
                 'store_code' => $storeCode,
@@ -86,23 +94,26 @@ class CategoryChangesService
                 'to_event_id' => $toEventId,
                 'has_more' => false,
                 'cursor_expired' => false,
-            ], [], $diagnostics);
-            $compressed = $this->compressor->compress($encoded);
+            ];
+            $encoded = $formatJson
+                ? $this->encodeJsonEnvelope($meta, [], $diagnostics)
+                : $this->encoder->encodeCategoryChangesEnvelope($meta, [], $diagnostics);
+            $compressed = $formatJson ? $encoded : $this->compressor->compress($encoded);
         }
 
         if (!$hasMore && count($rows) === $this->config->getCandidateLimit()) {
             $hasMore = true;
         }
 
-        return $this->response($storeCode, $afterEventId, $toEventId, $hasMore, $encoded, $compressed, false);
+        return $this->response($storeCode, $afterEventId, $toEventId, $hasMore, $encoded, $compressed, false, $formatJson);
     }
 
-    private function response(string $storeCode, int $fromEventId, int $toEventId, bool $hasMore, string $encoded, string $body, bool $cursorExpired): array
+    private function response(string $storeCode, int $fromEventId, int $toEventId, bool $hasMore, string $encoded, string $body, bool $cursorExpired, bool $formatJson = false): array
     {
         return [
             'body' => $body,
             'headers' => [
-                'Content-Type' => 'application/x-protobuf',
+                'Content-Type' => $formatJson ? 'application/json' : 'application/x-protobuf',
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
                 'X-Amida-Schema-Version' => '1',
                 'X-Amida-Stream' => Config::STREAM_CATEGORIES,
@@ -112,8 +123,17 @@ class CategoryChangesService
                 'X-Amida-Has-More' => $hasMore ? '1' : '0',
                 'X-Amida-Cursor-Expired' => $cursorExpired ? '1' : '0',
                 'X-Amida-Uncompressed-Length' => (string)strlen($encoded),
-            ] + ($this->compressor->isEnabled() ? ['Content-Encoding' => 'zstd'] : []),
+            ] + (!$formatJson && $this->compressor->isEnabled() ? ['Content-Encoding' => 'zstd'] : []),
         ];
+    }
+
+    /** @param array<string, mixed> $meta @param array<int, array<string, mixed>> $items @param array<int, array<string, mixed>> $diagnostics */
+    private function encodeJsonEnvelope(array $meta, array $items, array $diagnostics = []): string
+    {
+        return (string)json_encode($meta + [
+            'changes' => $items,
+            'diagnostics' => $diagnostics,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     private function rowToItem(array $row, string $storeCode): array

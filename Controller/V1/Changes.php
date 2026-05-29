@@ -37,10 +37,6 @@ class Changes extends AbstractFeedAction
             return $this->invalidResponse(404, 'Not found');
         }
 
-        if ($this->compressor->isEnabled() && !$this->compressor->isAvailable()) {
-            return $this->invalidResponse(503, 'zstd compression is enabled but ext-zstd is not installed');
-        }
-
         $stream = (string)$this->getRequest()->getParam('stream', Config::STREAM_ALL);
         if (!$this->config->isStreamEnabled($stream)) {
             return $this->invalidResponse(404, 'Unknown or disabled stream');
@@ -53,6 +49,9 @@ class Changes extends AbstractFeedAction
 
         $afterEventId = max(0, (int)$this->getRequest()->getParam('after_event_id', 0));
         $filters = $this->buildQueryFilters();
+        if (empty($filters['_format_json']) && $this->compressor->isEnabled() && !$this->compressor->isAvailable()) {
+            return $this->invalidResponse(503, 'zstd compression is enabled but ext-zstd is not installed');
+        }
         $dateError = $this->validateDateWindow($filters);
         if ($dateError !== null) {
             return $this->invalidResponse(400, $dateError);
@@ -79,6 +78,7 @@ class Changes extends AbstractFeedAction
             'changed_from' => trim((string)($body['changed_from'] ?? $this->getRequest()->getParam('changed_from', ''))),
             'changed_to' => trim((string)($body['changed_to'] ?? $this->getRequest()->getParam('changed_to', ''))),
             'include_offer' => (bool)(int)($body['include_offer'] ?? $this->getRequest()->getParam('include_offer', 0)),
+            '_format_json' => $this->parseFormatJson($body),
         ];
     }
 
@@ -93,6 +93,13 @@ class Changes extends AbstractFeedAction
             static fn (string $item): bool => $item !== ''
         ));
         return array_slice($parts, 0, $fromBody ? $this->config->getSkuFilterPostLimit() : $this->config->getSkuFilterGetLimit());
+    }
+
+    /** @param array<string, mixed> $body */
+    private function parseFormatJson(array $body): bool
+    {
+        $value = array_key_exists('format', $body) ? $body['format'] : $this->getRequest()->getParam('format', '');
+        return strtolower(trim((string)$value)) === 'json';
     }
 
     /** @return array<string, mixed> */

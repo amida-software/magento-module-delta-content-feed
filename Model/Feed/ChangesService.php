@@ -23,11 +23,16 @@ class ChangesService
     /** @param array<string, mixed> $filters */
     public function build(string $stream, string $storeCode, int $afterEventId, array $filters = []): array
     {
+        $formatJson = !empty($filters['_format_json']);
         $oldest = $this->changeLog->getOldestRetainedEventId();
         $last = $this->changeLog->getLastEventId();
         $cursorExpired = $afterEventId > 0 && $oldest > 0 && $afterEventId < $oldest;
         if ($cursorExpired) {
-            $encoded = $this->encoder->encodeChangesEnvelope([
+            $diagnostics = [[
+                'code' => 'cursor_expired',
+                'message' => 'Requested cursor is older than retained events.',
+            ]];
+            $meta = [
                 'schema_version' => 1,
                 'stream' => $stream,
                 'store_code' => $storeCode,
@@ -35,12 +40,12 @@ class ChangesService
                 'to_event_id' => $afterEventId,
                 'has_more' => false,
                 'cursor_expired' => true,
-            ], [], [[
-                'code' => 'cursor_expired',
-                'message' => 'Requested cursor is older than retained events.',
-            ]]);
-            $body = $this->compressor->compress($encoded);
-            return $this->response($stream, $storeCode, $afterEventId, $afterEventId, false, $encoded, $body, true);
+            ];
+            $encoded = $formatJson
+                ? $this->encodeJsonEnvelope($meta, [], $diagnostics)
+                : $this->encoder->encodeChangesEnvelope($meta, [], $diagnostics);
+            $body = $formatJson ? $encoded : $this->compressor->compress($encoded);
+            return $this->response($stream, $storeCode, $afterEventId, $afterEventId, false, $encoded, $body, true, $formatJson);
         }
 
         $includeOffer = (bool)($filters['include_offer'] ?? false);
@@ -66,7 +71,7 @@ class ChangesService
         foreach ($candidateRows as $row) {
             $decodedItem = $this->rowToItem($row, $includeOffer, $offerMap);
             $trialItems = array_merge($accepted, [$decodedItem]);
-            $trialEncoded = $this->encoder->encodeChangesEnvelope([
+            $trialMeta = [
                 'schema_version' => 1,
                 'stream' => $stream,
                 'store_code' => $storeCode,
@@ -74,8 +79,11 @@ class ChangesService
                 'to_event_id' => (int)$row['event_id'],
                 'has_more' => false,
                 'cursor_expired' => false,
-            ], $trialItems, $diagnostics);
-            $trialCompressed = $this->compressor->compress($trialEncoded);
+            ];
+            $trialEncoded = $formatJson
+                ? $this->encodeJsonEnvelope($trialMeta, $trialItems, $diagnostics)
+                : $this->encoder->encodeChangesEnvelope($trialMeta, $trialItems, $diagnostics);
+            $trialCompressed = $formatJson ? $trialEncoded : $this->compressor->compress($trialEncoded);
 
             if ($accepted === [] && strlen($trialCompressed) > $maxBytes) {
                 if (strlen($trialCompressed) <= $hardSingleLimit) {
@@ -116,7 +124,7 @@ class ChangesService
         }
 
         if ($encoded === null || $compressed === null) {
-            $encoded = $this->encoder->encodeChangesEnvelope([
+            $meta = [
                 'schema_version' => 1,
                 'stream' => $stream,
                 'store_code' => $storeCode,
@@ -124,15 +132,18 @@ class ChangesService
                 'to_event_id' => $toEventId,
                 'has_more' => false,
                 'cursor_expired' => false,
-            ], [], $diagnostics);
-            $compressed = $this->compressor->compress($encoded);
+            ];
+            $encoded = $formatJson
+                ? $this->encodeJsonEnvelope($meta, [], $diagnostics)
+                : $this->encoder->encodeChangesEnvelope($meta, [], $diagnostics);
+            $compressed = $formatJson ? $encoded : $this->compressor->compress($encoded);
         }
 
         if (!$hasMore && count($candidateRows) === $this->config->getCandidateLimit() && $toEventId < $last) {
             $hasMore = true;
         }
 
-        return $this->response($stream, $storeCode, $afterEventId, $toEventId, $hasMore, $encoded, $compressed, false);
+        return $this->response($stream, $storeCode, $afterEventId, $toEventId, $hasMore, $encoded, $compressed, false, $formatJson);
     }
 
     private function response(
@@ -143,12 +154,13 @@ class ChangesService
         bool $hasMore,
         string $encoded,
         string $body,
-        bool $cursorExpired
+        bool $cursorExpired,
+        bool $formatJson = false
     ): array {
         return [
             'body' => $body,
             'headers' => [
-                'Content-Type' => 'application/x-protobuf',
+                'Content-Type' => $formatJson ? 'application/json' : 'application/x-protobuf',
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
                 'X-Amida-Schema-Version' => '1',
                 'X-Amida-Stream' => $stream,
@@ -158,8 +170,17 @@ class ChangesService
                 'X-Amida-Has-More' => $hasMore ? '1' : '0',
                 'X-Amida-Cursor-Expired' => $cursorExpired ? '1' : '0',
                 'X-Amida-Uncompressed-Length' => (string)strlen($encoded),
-            ] + ($this->compressor->isEnabled() ? ['Content-Encoding' => 'zstd'] : []),
+            ] + (!$formatJson && $this->compressor->isEnabled() ? ['Content-Encoding' => 'zstd'] : []),
         ];
+    }
+
+    /** @param array<string, mixed> $meta @param array<int, array<string, mixed>> $items @param array<int, array<string, mixed>> $diagnostics */
+    private function encodeJsonEnvelope(array $meta, array $items, array $diagnostics = []): string
+    {
+        return (string)json_encode($meta + [
+            'changes' => $items,
+            'diagnostics' => $diagnostics,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /**

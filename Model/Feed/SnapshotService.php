@@ -27,6 +27,7 @@ class SnapshotService
             $this->snapshotRebuilder->rebuild();
         }
 
+        $formatJson = !empty($filters['_format_json']);
         $skus = $this->normalizeSkus((array)($filters['skus'] ?? []));
         $includeOffer = (bool)($filters['include_offer'] ?? false);
         $candidateLimit = $this->config->getCandidateLimit();
@@ -50,7 +51,7 @@ class SnapshotService
         foreach ($rows as $row) {
             $item = $this->rowToItem($row, $stream, $storeCode, $includeOffer, $offerMap, $diagnostics);
             $trialItems = array_merge($accepted, [$item]);
-            $trialEncoded = $this->encoder->encodeSnapshotEnvelope([
+            $trialMeta = [
                 'schema_version' => 1,
                 'stream' => $stream,
                 'store_code' => $storeCode,
@@ -58,8 +59,11 @@ class SnapshotService
                 'to_state_id' => $isSkuLookup ? 0 : (int)$row['state_id'],
                 'has_more' => false,
                 'changes_highwater_event_id' => $highwaterEventId,
-            ], $trialItems, $diagnostics);
-            $trialCompressed = $this->compressor->compress($trialEncoded);
+            ];
+            $trialEncoded = $formatJson
+                ? $this->encodeJsonEnvelope($trialMeta, $trialItems, $diagnostics)
+                : $this->encoder->encodeSnapshotEnvelope($trialMeta, $trialItems, $diagnostics);
+            $trialCompressed = $formatJson ? $trialEncoded : $this->compressor->compress($trialEncoded);
             if (strlen($trialCompressed) > $maxBytes) {
                 $hasMore = !$isSkuLookup;
                 break;
@@ -74,7 +78,7 @@ class SnapshotService
         }
 
         if ($encoded === null || $compressed === null) {
-            $encoded = $this->encoder->encodeSnapshotEnvelope([
+            $meta = [
                 'schema_version' => 1,
                 'stream' => $stream,
                 'store_code' => $storeCode,
@@ -82,8 +86,11 @@ class SnapshotService
                 'to_state_id' => $toStateId,
                 'has_more' => false,
                 'changes_highwater_event_id' => $highwaterEventId,
-            ], [], $diagnostics);
-            $compressed = $this->compressor->compress($encoded);
+            ];
+            $encoded = $formatJson
+                ? $this->encodeJsonEnvelope($meta, [], $diagnostics)
+                : $this->encoder->encodeSnapshotEnvelope($meta, [], $diagnostics);
+            $compressed = $formatJson ? $encoded : $this->compressor->compress($encoded);
         }
 
         if (!$isSkuLookup && !$hasMore && count($rows) === $candidateLimit) {
@@ -93,7 +100,7 @@ class SnapshotService
         return [
             'body' => $compressed,
             'headers' => [
-                'Content-Type' => 'application/x-protobuf',
+                'Content-Type' => $formatJson ? 'application/json' : 'application/x-protobuf',
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
                 'X-Amida-Schema-Version' => '1',
                 'X-Amida-Stream' => $stream,
@@ -104,8 +111,17 @@ class SnapshotService
                 'X-Amida-Changes-Highwater-Event-Id' => (string)$highwaterEventId,
                 'X-Amida-Uncompressed-Length' => (string)strlen($encoded),
                 'X-Amida-Mode' => $isSkuLookup ? 'sku_lookup' : 'cursor_snapshot',
-            ] + ($this->compressor->isEnabled() ? ['Content-Encoding' => 'zstd'] : []),
+            ] + (!$formatJson && $this->compressor->isEnabled() ? ['Content-Encoding' => 'zstd'] : []),
         ];
+    }
+
+    /** @param array<string, mixed> $meta @param array<int, array<string, mixed>> $items @param array<int, array<string, mixed>> $diagnostics */
+    private function encodeJsonEnvelope(array $meta, array $items, array $diagnostics = []): string
+    {
+        return (string)json_encode($meta + [
+            'items' => $items,
+            'diagnostics' => $diagnostics,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /**
