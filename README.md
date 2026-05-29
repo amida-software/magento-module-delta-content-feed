@@ -72,3 +72,7 @@ GET /amidafeed/v1/snapshot/key/<KEY>/stream/attributes?store=<STORE>&codes=color
 ```
 
 See `docs/SPEC_STORE_ENDPOINT.md` and `docs/TESTING_STORE_ENDPOINT.md`.
+
+## Development workflow
+
+Module development is done in Codex Web and validated on Railway; local Docker/MariaDB is not part of the workflow. See `docs/CODEX_WEB_RAILWAY_WORKFLOW.md`.
