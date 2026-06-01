@@ -6,7 +6,7 @@ Installable Magento 2 module that publishes product deltas over public HTTP endp
 
 - Maintains its own append-only product change log.
 - Publishes streams: `content`, `seo`, `price`, `availability`, `category`, `offer`, `curated`, `all`, plus `categories` for the category dictionary.
-- Adds a consumer-friendly `curated` product stream with full product documents: SKU, old/new price, simple availability, name, description, full image URLs, brand, product type, category IDs, notes and related products.
+- Adds a consumer-friendly `curated` product stream with full product documents: SKU, old/new price, simple availability, name, description, full image URLs, brand, product type, category IDs, notes and related products. Configurable parents are excluded from `curated`; their child variations carry the data and inherit empty fields (categories, images, description, etc.) from the parent, and `description`/`short_description` are HTML-stripped. See [docs/TECHNICAL.md](docs/TECHNICAL.md#curated-product-payload).
 - Adds direct-SQL `offer` export for price, salability and qty from Magento source DB tables, not price/stock indexes.
 - Adds `categories` dictionary export with category tree/content metadata.
 - Uses a monotonic `event_id` cursor.
@@ -71,7 +71,7 @@ GET /amidafeed/v1/attributes/key/<KEY>?store=<STORE>&codes=color,size
 GET /amidafeed/v1/snapshot/key/<KEY>/stream/attributes?store=<STORE>&codes=color,size
 ```
 
-The attributes dictionary defaults to schema v2: top-level `attributes` is keyed by attribute id, while `product_types` and `attribute_sets` contain relation trees with attribute id references only. Legacy `items[]` is returned only when `schema=v1` is requested explicitly. Store-code label maps are emitted for every filled store label, and only attributes assigned to used product attribute sets/groups with at least one non-empty product value are returned. Admin labels are emitted separately as `admin_label` only when they differ from localized store labels.
+The attributes dictionary defaults to schema v2: top-level `attributes` is keyed by **attribute code**, while `product_types` and `attribute_sets` contain relation trees that reference those codes (`attribute_codes`). Legacy `items[]` is returned only when `schema=v1` is requested explicitly. `load_options` defaults to **false** — pass `load_options=1` to embed `options[]`; otherwise selectable attributes carry only `options_count`. By default the result is limited to the attributes selected in the module admin config (`content/include_attributes` / `content/exclude_attributes`); pass `all=1` to return every attribute that has a non-empty product value, and `pretty=1` for an indented JSON body. Store-code label maps are emitted for every filled store label, and only attributes assigned to used product attribute sets/groups with at least one non-empty product value are returned. Admin labels are emitted separately as `admin_label` only when they differ from localized store labels.
 
 See `docs/SPEC_STORE_ENDPOINT.md` and `docs/TESTING_STORE_ENDPOINT.md`.
 

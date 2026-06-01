@@ -35,7 +35,7 @@ foreach ($requiredServiceTokens as $needle => $message) {
 }
 
 $spec = file_get_contents($specPath);
-foreach (['product_types', 'attribute_sets', 'labels', 'admin_label', 'attribute_codes', 'attribute_ids', 'load_options', 'schema=v1', 'schema_version', 'non-empty product value', 'Railway'] as $needle) {
+foreach (['product_types', 'attribute_sets', 'labels', 'admin_label', 'attribute_codes', 'load_options', 'schema=v1', 'schema_version', 'non-empty product value', 'Railway'] as $needle) {
     if (!str_contains($spec, $needle)) {
         fwrite(STDERR, "SPEC_STORE_ENDPOINT.md must document $needle for attributes.\n");
         exit(1);

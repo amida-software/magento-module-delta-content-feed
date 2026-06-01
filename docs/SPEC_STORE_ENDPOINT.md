@@ -208,9 +208,9 @@ Adapter output is treated as untrusted input and normalized by the core module.
 
 ## 10. Attributes dictionary endpoint
 
-The endpoint returns attribute metadata, not product values. Schema v2 is the default response shape for `/attributes` and `/snapshot/.../stream/attributes`; schema v1 is legacy and is returned only when `schema=v1` is explicitly requested. `load_options` defaults to true. `load_options=false` may be sent as a JSON boolean false, numeric `0`, or string `"0"`, `"false"`, `"no"`, or `"off"`; when disabled, attributes omit `options[]` everywhere and selectable attributes that have options expose `options_count` from a lightweight option count query.
+The endpoint returns attribute metadata, not product values. Schema v2 is the default response shape for `/attributes` and `/snapshot/.../stream/attributes`; schema v1 is legacy and is returned only when `schema=v1` is explicitly requested. `load_options` defaults to **false** — options are only loaded when explicitly requested with `load_options=1` (also accepted: JSON boolean true, numeric `1`, or string `"true"`, `"yes"`, `"on"`). When options are not loaded, attributes omit `options[]` everywhere and selectable attributes that have options expose `options_count` from a lightweight option count query. By default the dictionary is limited to the attributes selected in the module admin config (`content/include_attributes` / `content/exclude_attributes`, same selection logic as the content stream); pass `all=1` to bypass that filter and return every attribute that has a non-empty product value. Pass `pretty=1` for an indented, human-readable JSON body (the default body is compact).
 
-Default schema v2 example:
+Default schema v2 example (with default `load_options=false`):
 
 ```json
 {
@@ -218,8 +218,7 @@ Default schema v2 example:
   "entity": "attributes",
   "store_code": "default",
   "attributes": {
-    "93": {
-      "id": 93,
+    "color": {
       "code": "color",
       "label": "Colour",
       "labels": {"ua": "Колір", "ru": "Цвет", "default": "Colour"},
@@ -228,12 +227,7 @@ Default schema v2 example:
       "unit": null,
       "is_filterable": true,
       "is_searchable": true,
-      "is_visible": true,
-      "is_visible_on_front": false,
-      "is_required": false,
-      "options": [
-        {"value": "12", "label": "Black", "labels": {"ua": "Чорний", "ru": "Черный", "default": "Black"}}
-      ]
+      "options_count": 24
     }
   },
   "attribute_sets": [
@@ -241,29 +235,30 @@ Default schema v2 example:
       "id": 4,
       "name": "Default",
       "groups": [
-        {"id": 7, "name": "Product Details", "attribute_ids": [93]}
+        {"id": 7, "name": "Product Details", "attribute_codes": ["color"]}
       ]
     }
   ],
   "product_types": [
-    {"code": "simple", "label": "Simple Product", "attribute_ids": [93]}
+    {"code": "simple", "label": "Simple Product", "attribute_codes": ["color"]}
   ],
   "diagnostics": []
 }
 ```
 
-With `load_options=0`, selectable attributes look like:
+With `load_options=1`, selectable attributes additionally carry the localized `options[]` list (and `options_count` is omitted):
 
 ```json
 {
-  "id": 93,
   "code": "color",
   "kind": "select",
-  "options_count": 24
+  "options": [
+    {"value": "12", "label": "Black", "labels": {"ua": "Чорний", "ru": "Черный", "default": "Black"}}
+  ]
 }
 ```
 
-Legacy schema v1 (`schema=v1`) retains `items[]`, `product_types[].attribute_codes`, `product_count`, and `attribute_sets[].groups[].attribute_codes` for backward compatibility. New consumers should use schema v2; there is no default `items[]` in schema v2. Top-level `attributes` is a JSON object keyed by stringified attribute id because JSON object keys are strings, while relation arrays (`product_types[].attribute_ids` and `attribute_sets[].groups[].attribute_ids`) contain numeric JSON numbers. Schema v2 relation nodes intentionally contain only IDs and display labels/names, not embedded attribute objects or product counts.
+Legacy schema v1 (`schema=v1`) retains `items[]`, `product_types[].attribute_codes`, `product_count`, and `attribute_sets[].groups[].attribute_codes` for backward compatibility. New consumers should use schema v2; there is no default `items[]` in schema v2. Top-level `attributes` is a JSON object keyed by **attribute code**, and relation arrays (`product_types[].attribute_codes` and `attribute_sets[].groups[].attribute_codes`) reference those same codes. Schema v2 relation nodes intentionally contain only codes and display labels/names, not embedded attribute objects, numeric ids, or product counts. (Earlier drafts keyed `attributes` by stringified attribute id and used numeric `attribute_ids`; that has been replaced by code-based keys and relations. The per-attribute `id`, `is_visible`, `is_visible_on_front`, and `is_required` fields have also been removed.)
 
 Filtering rules:
 

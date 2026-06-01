@@ -127,8 +127,9 @@ Then verify:
 
 Additional schema v2 acceptance checks:
 
-- Request `/amidafeed/v1/attributes/key/<KEY>?store=default&load_options=0` and verify the default response has `schema_version: 2`, top-level `attributes`, no top-level `items`, no nested `options` keys, and at least one selectable attribute with `options_count > 0` when the catalog has selectable attributes with options.
-- Repeat with a JSON POST body containing `{"load_options": false}` to verify robust boolean parsing. The values `0`, `"0"`, `"false"`, `"no"`, and `"off"` must behave the same way.
-- Verify every `product_types[].attribute_ids[]` and `attribute_sets[].groups[].attribute_ids[]` value is a JSON number and resolves to an existing key in the top-level `attributes` object.
+- Request `/amidafeed/v1/attributes/key/<KEY>?store=default` and verify the default response has `schema_version: 2`, a top-level `attributes` object **keyed by attribute code**, no top-level `items`, no nested `options` keys (because `load_options` now defaults to false / `load_options=0`), and at least one selectable attribute with `options_count > 0` when the catalog has selectable attributes with options.
+- Pass `load_options=1` and verify selectable attributes carry `options[]` and omit `options_count`. The truthy values `1`, `"1"`, `"true"`, `"yes"`, `"on"` (and JSON boolean true in a POST body) enable options; absence or any other value leaves them disabled.
+- Verify every `product_types[].attribute_codes[]` and `attribute_sets[].groups[].attribute_codes[]` value is a string that resolves to an existing key in the top-level `attributes` object, that each attribute map key equals its inner `code`, and that no per-attribute `id`, `is_visible`, `is_visible_on_front`, or `is_required` fields are present.
+- Request `?all=1` and confirm attributes dropped by `content/exclude_attributes` (or outside a non-empty `content/include_attributes`) reappear, while the default (filtered) request omits them. Pass `pretty=1` and confirm the body is indented, human-readable JSON.
 - Request `schema=v1` explicitly to confirm legacy `items[]` remains available only for v1 consumers.
 - Request `format=json` on product snapshot/changes and category snapshot/changes streams, including empty and cursor-expired cases where possible, and verify `Content-Type: application/json`, `json_decode` success, and no protobuf bytes.

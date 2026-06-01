@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Amida\ProductDeltaFeed\Test\Unit\Model\Feed;
 
 use Amida\ProductDeltaFeed\Model\Config;
+use Amida\ProductDeltaFeed\Model\Feed\CuratedParentInheritance;
 use Amida\ProductDeltaFeed\Model\Feed\FeedEncoder;
 use Amida\ProductDeltaFeed\Model\Feed\SnapshotService;
 use Amida\ProductDeltaFeed\Model\Feed\ZstdCompressor;
@@ -21,6 +22,7 @@ class SnapshotServiceTest extends TestCase
     private FeedEncoder&MockObject $encoder;
     private ZstdCompressor&MockObject $compressor;
     private SnapshotRebuilder&MockObject $snapshotRebuilder;
+    private CuratedParentInheritance&MockObject $parentInheritance;
 
     protected function setUp(): void
     {
@@ -30,6 +32,7 @@ class SnapshotServiceTest extends TestCase
         $this->encoder = $this->createMock(FeedEncoder::class);
         $this->compressor = $this->createMock(ZstdCompressor::class);
         $this->snapshotRebuilder = $this->createMock(SnapshotRebuilder::class);
+        $this->parentInheritance = $this->createMock(CuratedParentInheritance::class);
     }
 
     public function testFirstRequestRebuildsSnapshotAndReturnsOrderedRows(): void
@@ -70,7 +73,8 @@ class SnapshotServiceTest extends TestCase
             $this->changeLog,
             $this->encoder,
             $this->compressor,
-            $this->snapshotRebuilder
+            $this->snapshotRebuilder,
+            $this->parentInheritance
         );
 
         $result = $service->build('content', 'default', 0);
@@ -102,7 +106,8 @@ class SnapshotServiceTest extends TestCase
             $this->changeLog,
             $this->encoder,
             $this->compressor,
-            $this->snapshotRebuilder
+            $this->snapshotRebuilder,
+            $this->parentInheritance
         );
 
         $result = $service->build('content', 'default', 15);
@@ -161,7 +166,8 @@ class SnapshotServiceTest extends TestCase
             $this->changeLog,
             $this->encoder,
             $this->compressor,
-            $this->snapshotRebuilder
+            $this->snapshotRebuilder,
+            $this->parentInheritance
         );
 
         $result = $service->build('content', 'default', 0, [

@@ -16,7 +16,8 @@ class SnapshotService
         private readonly ChangeLog $changeLog,
         private readonly FeedEncoder $encoder,
         private readonly ZstdCompressor $compressor,
-        private readonly SnapshotRebuilder $snapshotRebuilder
+        private readonly SnapshotRebuilder $snapshotRebuilder,
+        private readonly CuratedParentInheritance $parentInheritance
     ) {
     }
 
@@ -38,6 +39,9 @@ class SnapshotService
             ? $this->stateSnapshot->fetchSnapshotRowsBySkus($stream, $storeCode, $skus, min($candidateLimit, count($skus)))
             : $this->stateSnapshot->fetchSnapshotRows($stream, $storeCode, $afterStateId, $candidateLimit);
 
+        $parentCuratedMap = $stream === Config::STREAM_CURATED
+            ? $this->parentInheritance->buildParentCuratedMap($rows, $storeCode)
+            : [];
         $offerMap = $includeOffer ? $this->loadOfferMap($rows, $storeCode) : [];
         $diagnostics = $this->buildSkuDiagnostics($isSkuLookup ? $skus : [], $rows, $stream);
         $accepted = [];
@@ -49,7 +53,17 @@ class SnapshotService
         $maxBytes = $this->config->getMaxBatchSizeBytes();
 
         foreach ($rows as $row) {
-            $item = $this->rowToItem($row, $stream, $storeCode, $includeOffer, $offerMap, $diagnostics);
+            $item = $this->rowToItem($row, $stream, $storeCode, $includeOffer, $offerMap, $diagnostics, $parentCuratedMap);
+
+            // Configurable parents are excluded from the curated output; their children carry the data.
+            if ($stream === Config::STREAM_CURATED
+                && (($item['payload']['curated']['magento_type_id'] ?? null) === 'configurable')) {
+                if (!$isSkuLookup) {
+                    $toStateId = (int)$row['state_id'];
+                }
+                continue;
+            }
+
             $trialItems = array_merge($accepted, [$item]);
             $trialMeta = [
                 'schema_version' => 1,
@@ -127,8 +141,9 @@ class SnapshotService
     /**
      * @param array<string, array<string, mixed>> $offerMap
      * @param array<int, array<string, mixed>> $diagnostics
+     * @param array<string, array<string, mixed>> $parentCuratedMap child sku => parent curated payload
      */
-    private function rowToItem(array $row, string $stream, string $storeCode, bool $includeOffer = false, array $offerMap = [], array &$diagnostics = []): array
+    private function rowToItem(array $row, string $stream, string $storeCode, bool $includeOffer = false, array $offerMap = [], array &$diagnostics = [], array $parentCuratedMap = []): array
     {
         $payload = json_decode((string)$row['state_json'], true) ?: [];
         $stateHash = (string)($row['state_hash'] ?? '');
@@ -147,6 +162,24 @@ class SnapshotService
             }
         }
 
+        if ($stream === Config::STREAM_CURATED && isset($payload['curated']) && is_array($payload['curated'])) {
+            // Configurable child inheritance: fill empty fields from the parent. Done before
+            // stripping so inherited description/short_description are also stripped. state_hash is
+            // left as the canonical source-state version and is intentionally not recomputed here.
+            $sku = (string)($row['sku'] ?? '');
+            if ($sku !== '' && isset($parentCuratedMap[$sku]) && is_array($parentCuratedMap[$sku])) {
+                $payload['curated'] = $this->parentInheritance->inherit($payload['curated'], $parentCuratedMap[$sku]);
+            }
+
+            // Presentational HTML stripping for curated description fields. Applied at read time so
+            // it also covers already-stored snapshots without a full state rebuild.
+            foreach (['description', 'short_description'] as $htmlField) {
+                if (isset($payload['curated'][$htmlField]) && is_string($payload['curated'][$htmlField])) {
+                    $payload['curated'][$htmlField] = $this->stripHtmlText($payload['curated'][$htmlField]);
+                }
+            }
+        }
+
         return [
             'state_id' => (int)$row['state_id'],
             'product_id' => (int)$row['entity_id'],
@@ -157,6 +190,17 @@ class SnapshotService
             'state_hash' => $stateHash,
             'payload' => $payload,
         ];
+    }
+
+    /** Strip HTML tags/entities to plain text (no truncation). Returns null when empty. */
+    private function stripHtmlText(string $value): ?string
+    {
+        $value = preg_replace('#<(script|style)\b[^>]*>.*?</\1>#is', ' ', $value) ?? $value;
+        $value = preg_replace('#<[^>]+>#', ' ', $value) ?? $value;
+        $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        $value = trim($value);
+        return $value === '' ? null : $value;
     }
 
     /**

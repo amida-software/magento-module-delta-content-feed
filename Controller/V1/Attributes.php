@@ -43,7 +43,36 @@ class Attributes extends AbstractFeedAction
             return $this->invalidResponse(400, 'Invalid store code');
         }
 
-        return $this->jsonResponse($this->attributeDictionaryService->build($storeCode, $this->parseCodes(), $this->parseLoadOptions(), $this->parseSchemaVersion()));
+        $payload = $this->attributeDictionaryService->build($storeCode, $this->parseCodes(), $this->parseLoadOptions(), $this->parseSchemaVersion(), $this->parseAll());
+
+        return $this->parsePretty()
+            ? $this->prettyJsonResponse($payload)
+            : $this->jsonResponse($payload);
+    }
+
+    private function parsePretty(): bool
+    {
+        return $this->parseBoolFlag('pretty');
+    }
+
+    private function parseAll(): bool
+    {
+        return $this->parseBoolFlag('all');
+    }
+
+    /** Truthy query/body flag, default false. */
+    private function parseBoolFlag(string $name): bool
+    {
+        $body = $this->readJsonBody();
+        $value = array_key_exists($name, $body) ? $body[$name] : $this->getRequest()->getParam($name, false);
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return (int)$value !== 0;
+        }
+        $normalized = strtolower(trim((string)$value));
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 
     /** @return string[] */
@@ -58,19 +87,8 @@ class Attributes extends AbstractFeedAction
 
     private function parseLoadOptions(): bool
     {
-        $body = $this->readJsonBody();
-        $value = array_key_exists('load_options', $body) ? $body['load_options'] : $this->getRequest()->getParam('load_options', true);
-        if (is_bool($value)) {
-            return $value;
-        }
-        if (is_int($value) || is_float($value)) {
-            return (int)$value !== 0;
-        }
-        $normalized = strtolower(trim((string)$value));
-        if ($normalized === '') {
-            return true;
-        }
-        return !in_array($normalized, ['0', 'false', 'no', 'off'], true);
+        // Default false: options are only loaded when explicitly requested (load_options=1).
+        return $this->parseBoolFlag('load_options');
     }
 
     private function parseSchemaVersion(): int

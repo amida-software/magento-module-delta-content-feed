@@ -87,4 +87,15 @@ abstract class AbstractFeedAction extends Action
         $result->setHttpResponseCode($statusCode);
         return $result->setData($payload);
     }
+
+    protected function prettyJsonResponse(array $payload, int $statusCode = 200): Raw
+    {
+        $result = $this->rawFactory->create();
+        $result->setHeader('Content-Type', 'application/json', true);
+        $result->setHttpResponseCode($statusCode);
+        $result->setContents(
+            (string)json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        );
+        return $result;
+    }
 }

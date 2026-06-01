@@ -42,7 +42,7 @@ Magento saves, mass attribute updates, category assignments and stock updates en
 - `price`: catalog price fields.
 - `availability`: stock/salability state.
 - `category`: full current category assignments plus `added_category_ids` / `removed_category_ids`.
-- `curated`: full consumer-friendly product document. It intentionally duplicates selected data from the lower-level streams so downstream importers do not have to join `seo + price + availability + category + content` just to build a storefront product card.
+- `curated`: full consumer-friendly product document. It intentionally duplicates selected data from the lower-level streams so downstream importers do not have to join `seo + price + availability + category + content` just to build a storefront product card. Configurable parents are excluded and their child variations inherit empty parent fields; `description`/`short_description` are HTML-stripped (see [Curated product payload](#curated-product-payload)).
 - `all`: duplicates individual events in one ordered stream and preserves `origin_stream`.
 
 ### Curated product payload
@@ -59,6 +59,16 @@ Magento saves, mass attribute updates, category assignments and stock updates en
 - `category_ids[]`; category dictionaries are intentionally fetched separately by consumers when an unknown ID appears
 - `notes[]`
 - `related_products[]` for Magento linked products such as related/up-sell/cross-sell
+
+#### Configurable products and read-time normalization
+
+The `curated` stream is a flat list of sellable simple/child products:
+
+- **Configurable parents are excluded** from the output (matched by `magento_type_id == 'configurable'`); their child variations carry the product data instead.
+- **Children inherit from their configurable parent** every field below that is empty on the child: `category_ids`, `images`, `description`, `short_description`, `url_key`, `brand`, `product_type`, `notes`, `related_products`. Never inherited (always the child's own values): `sku`, `name`, `prices`, `availability`, `magento_type_id`. The parent is resolved via `catalog_product_super_link`, reusing the parent's stored curated state.
+- `description` and `short_description` are **HTML-stripped** to plain text.
+
+These three normalizations are currently applied at **snapshot read time** (`Model/Feed/SnapshotService::rowToItem` + `Model/Feed/CuratedParentInheritance`), so they take effect on already-stored states without a snapshot rebuild. Caveat: the `changes` stream (`Model/Feed/ChangesService`) does not yet apply them and returns the raw stored curated payload, so `snapshot` and `changes` are not byte-identical for `curated` until this is unified at build time.
 
 ## Tests
 

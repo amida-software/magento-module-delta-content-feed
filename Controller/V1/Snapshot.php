@@ -50,7 +50,7 @@ class Snapshot extends AbstractFeedAction
         }
 
         if ($stream === Config::STREAM_ATTRIBUTES) {
-            return $this->jsonResponse($this->attributeDictionaryService->build($storeCode, $this->parseCodes(), $this->parseLoadOptions(), $this->parseSchemaVersion()));
+            return $this->jsonResponse($this->attributeDictionaryService->build($storeCode, $this->parseCodes(), $this->parseLoadOptions(), $this->parseSchemaVersion(), $this->parseAll()));
         }
 
         $afterStateId = max(0, (int)$this->getRequest()->getParam('after_state_id', 0));
@@ -111,8 +111,20 @@ class Snapshot extends AbstractFeedAction
 
     private function parseLoadOptions(): bool
     {
+        // Default false: options are only loaded when explicitly requested (load_options=1).
+        return $this->parseBoolFlag('load_options');
+    }
+
+    private function parseAll(): bool
+    {
+        return $this->parseBoolFlag('all');
+    }
+
+    /** Truthy query/body flag, default false. */
+    private function parseBoolFlag(string $name): bool
+    {
         $body = $this->readJsonBody();
-        $value = array_key_exists('load_options', $body) ? $body['load_options'] : $this->getRequest()->getParam('load_options', true);
+        $value = array_key_exists($name, $body) ? $body[$name] : $this->getRequest()->getParam($name, false);
         if (is_bool($value)) {
             return $value;
         }
@@ -120,10 +132,7 @@ class Snapshot extends AbstractFeedAction
             return (int)$value !== 0;
         }
         $normalized = strtolower(trim((string)$value));
-        if ($normalized === '') {
-            return true;
-        }
-        return !in_array($normalized, ['0', 'false', 'no', 'off'], true);
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 
     private function parseSchemaVersion(): int

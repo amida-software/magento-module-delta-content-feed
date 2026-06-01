@@ -15,7 +15,8 @@ class AttributesControllerTest extends AbstractFeedControllerTest
         $this->configWriter->save('amida_productdeltafeed/streams/attributes_enabled', 1);
         $this->cacheTypeList->cleanType('config');
 
-        $this->dispatch('amidafeed/v1/attributes/key/integration-key?store=default&codes=name');
+        // all=1 bypasses the admin include/exclude filter so 'name' is present regardless of config.
+        $this->dispatch('amidafeed/v1/attributes/key/integration-key?store=default&codes=name&all=1');
         self::assertSame(200, $this->getResponse()->getHttpResponseCode());
         self::assertStringContainsString('application/json', (string)$this->getResponse()->getHeader('Content-Type')->getFieldValue());
         $payload = json_decode($this->getResponse()->getBody(), true);
@@ -25,17 +26,17 @@ class AttributesControllerTest extends AbstractFeedControllerTest
         self::assertArrayHasKey('attributes', $payload);
         self::assertArrayNotHasKey('items', $payload);
         self::assertIsArray($payload['attributes']);
-        $attributeIds = array_keys($payload['attributes']);
-        foreach ($attributeIds as $attributeId) {
-            self::assertMatchesRegularExpression('/^\d+$/', (string)$attributeId);
-        }
-        foreach ($payload['attributes'] as $attribute) {
-            self::assertArrayHasKey('id', $attribute);
-            self::assertIsInt($attribute['id']);
-            self::assertArrayHasKey('code', $attribute);
+        // The attributes map is keyed by attribute code (not numeric id).
+        foreach ($payload['attributes'] as $code => $attribute) {
+            self::assertIsString($code);
+            self::assertDoesNotMatchRegularExpression('/^\d+$/', (string)$code);
+            self::assertSame($code, $attribute['code'] ?? null);
+            self::assertArrayNotHasKey('id', $attribute);
             self::assertArrayHasKey('label', $attribute);
             self::assertArrayHasKey('labels', $attribute);
-            self::assertArrayNotHasKey('options_count', $attribute);
+            self::assertArrayNotHasKey('is_visible', $attribute);
+            self::assertArrayNotHasKey('is_visible_on_front', $attribute);
+            self::assertArrayNotHasKey('is_required', $attribute);
             self::assertArrayNotHasKey('admin', $attribute['labels']);
             self::assertArrayNotHasKey('product_types', $attribute);
             self::assertArrayNotHasKey('attribute_set_ids', $attribute);
@@ -43,27 +44,42 @@ class AttributesControllerTest extends AbstractFeedControllerTest
         }
         foreach ($payload['product_types'] as $type) {
             self::assertArrayHasKey('code', $type);
-            self::assertArrayHasKey('attribute_ids', $type);
-            self::assertArrayNotHasKey('attribute_codes', $type);
+            self::assertArrayHasKey('attribute_codes', $type);
+            self::assertArrayNotHasKey('attribute_ids', $type);
             self::assertArrayNotHasKey('product_count', $type);
-            foreach ($type['attribute_ids'] as $attributeId) {
-                self::assertIsInt($attributeId);
-                self::assertArrayHasKey((string)$attributeId, $payload['attributes']);
+            foreach ($type['attribute_codes'] as $attributeCode) {
+                self::assertIsString($attributeCode);
+                self::assertArrayHasKey($attributeCode, $payload['attributes']);
             }
         }
         foreach ($payload['attribute_sets'] as $set) {
             self::assertArrayHasKey('groups', $set);
             self::assertArrayNotHasKey('product_count', $set);
             foreach ($set['groups'] as $group) {
-                self::assertArrayHasKey('attribute_ids', $group);
-                self::assertArrayNotHasKey('attribute_codes', $group);
+                self::assertArrayHasKey('attribute_codes', $group);
+                self::assertArrayNotHasKey('attribute_ids', $group);
                 self::assertArrayNotHasKey('attributes', $group);
-                foreach ($group['attribute_ids'] as $attributeId) {
-                    self::assertIsInt($attributeId);
-                    self::assertArrayHasKey((string)$attributeId, $payload['attributes']);
+                foreach ($group['attribute_codes'] as $attributeCode) {
+                    self::assertIsString($attributeCode);
+                    self::assertArrayHasKey($attributeCode, $payload['attributes']);
                 }
             }
         }
+    }
+
+    public function testAttributesEndpointAllFlagBypassesConfigFilter(): void
+    {
+        $this->configWriter->save('amida_productdeltafeed/streams/attributes_enabled', 1);
+        // Exclude 'name' via the content config: the default (filtered) view must drop it,
+        // while ?all=1 must still include it.
+        $this->configWriter->save('amida_productdeltafeed/content/include_attributes', '');
+        $this->configWriter->save('amida_productdeltafeed/content/exclude_attributes', 'name');
+        $this->cacheTypeList->cleanType('config');
+
+        $this->dispatch('amidafeed/v1/attributes/key/integration-key?store=default&all=1');
+        self::assertSame(200, $this->getResponse()->getHttpResponseCode());
+        $all = json_decode($this->getResponse()->getBody(), true)['attributes'] ?? [];
+        self::assertArrayHasKey('name', $all, 'all=1 must bypass the exclude_attributes filter');
     }
 
     public function testAttributesEndpointKeepsItemsOnlyForExplicitSchemaV1(): void

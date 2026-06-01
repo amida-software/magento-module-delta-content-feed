@@ -3,12 +3,30 @@ declare(strict_types=1);
 
 namespace Amida\ProductDeltaFeed\Model\Store;
 
+use Amida\ProductDeltaFeed\Model\AttributeSelector;
 use Amida\ProductDeltaFeed\Model\Config;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Store\Model\StoreManagerInterface;
 
 class AttributeDictionaryService
 {
+    /**
+     * Core/base attribute codes that are always exported, even when they are not part of the
+     * admin include list (content/include_attributes). The ?all=1 path is unaffected.
+     *
+     * @var string[]
+     */
+    private const BASE_ATTRIBUTE_CODES = [
+        'sku',
+        'image',
+        'created_at',
+        'updated_at',
+        'name',
+        'description',
+        'short_description',
+        'url_key',
+    ];
+
     /** @var array<string, string> */
     private array $tableColumns = [];
 
@@ -19,12 +37,13 @@ class AttributeDictionaryService
         private readonly Config $config,
         private readonly ResourceConnection $resourceConnection,
         private readonly StoreManagerInterface $storeManager,
-        private readonly StoreMetadataAdapterPool $adapterPool
+        private readonly StoreMetadataAdapterPool $adapterPool,
+        private readonly AttributeSelector $attributeSelector
     ) {
     }
 
     /** @param string[] $codes */
-    public function build(string $storeCode, array $codes = [], bool $loadOptions = true, int $schemaVersion = 2): array
+    public function build(string $storeCode, array $codes = [], bool $loadOptions = true, int $schemaVersion = 2, bool $includeAll = false): array
     {
         $store = $this->storeManager->getStore($storeCode);
         $context = new StoreContext(
@@ -40,7 +59,7 @@ class AttributeDictionaryService
         $usedAttributeSets = $entityTypeId > 0 ? $this->loadUsedAttributeSets($context, $entityTypeId) : [];
         $productTypes = $entityTypeId > 0 ? $this->loadProductTypes($context) : [];
         $items = $entityTypeId > 0 && $usedAttributeSets !== []
-            ? $this->loadAttributes($context, $entityTypeId, array_keys($usedAttributeSets), array_column($productTypes, 'code'), $codes, $loadOptions)
+            ? $this->loadAttributes($context, $entityTypeId, array_keys($usedAttributeSets), array_column($productTypes, 'code'), $codes, $loadOptions, $includeAll)
             : [];
         $productTypes = $this->attachProductTypeAttributeCodes($productTypes, $items);
         $admin = $this->adminMetadata($storeCode);
@@ -72,15 +91,15 @@ class AttributeDictionaryService
             'schema_version' => 2,
             'entity' => 'attributes',
             'store_code' => $storeCode,
-            'attributes' => $this->attributesById($items),
+            'attributes' => $this->attributesByCode($items),
             'attribute_sets' => $this->buildAttributeSetTree($usedAttributeSets, $items, true),
-            'product_types' => $this->attachProductTypeAttributeIds($productTypes, $items),
+            'product_types' => $this->finalizeProductTypesForV2($productTypes),
             'diagnostics' => [],
         ];
     }
 
     /** @param int[] $usedAttributeSetIds @param string[] $productTypeCodes @param string[] $codes @return array<string, array<string, mixed>> */
-    private function loadAttributes(StoreContext $context, int $entityTypeId, array $usedAttributeSetIds, array $productTypeCodes, array $codes, bool $loadOptions): array
+    private function loadAttributes(StoreContext $context, int $entityTypeId, array $usedAttributeSetIds, array $productTypeCodes, array $codes, bool $loadOptions, bool $includeAll = false): array
     {
         $connection = $this->resourceConnection->getConnection();
         $select = $connection->select()
@@ -99,8 +118,27 @@ class AttributeDictionaryService
             ->where('a.entity_type_id = ?', $entityTypeId)
             ->where('eea.attribute_set_id IN (?)', $usedAttributeSetIds)
             ->order(['a.attribute_code ASC', 'eea.attribute_set_id ASC', 'ag.sort_order ASC', 'eea.sort_order ASC']);
-        if ($codes !== []) {
-            $select->where('a.attribute_code IN (?)', $codes);
+        // By default limit the dictionary to the attributes selected in the module admin
+        // config (same include/exclude logic as the content stream). When $includeAll is
+        // set (?all=1) the config filter is bypassed and every attribute with product
+        // values is returned. Explicit request codes always further narrow the result.
+        if ($includeAll) {
+            if ($codes !== []) {
+                $select->where('a.attribute_code IN (?)', $codes);
+            }
+        } else {
+            // Config selection (include/exclude) plus the always-on base attribute codes.
+            $allowedCodes = array_values(array_unique(array_merge(
+                $this->attributeSelector->getContentAttributeCodes(),
+                self::BASE_ATTRIBUTE_CODES
+            )));
+            $effectiveCodes = $codes !== []
+                ? array_values(array_intersect($codes, $allowedCodes))
+                : $allowedCodes;
+            if ($effectiveCodes === []) {
+                return [];
+            }
+            $select->where('a.attribute_code IN (?)', $effectiveCodes);
         }
 
         $rows = $connection->fetchAll($select);
@@ -164,7 +202,6 @@ class AttributeDictionaryService
                 }
             }
             $item = [
-                'id' => $attributeId,
                 'code' => $code,
                 'label' => $label,
                 'labels' => $labels,
@@ -172,9 +209,6 @@ class AttributeDictionaryService
                 'unit' => null,
                 'is_filterable' => (bool)(int)($row['is_filterable'] ?? 0),
                 'is_searchable' => (bool)(int)($row['is_searchable'] ?? 0),
-                'is_visible' => (bool)(int)($row['is_visible'] ?? 1),
-                'is_visible_on_front' => (bool)(int)($row['is_visible_on_front'] ?? 0),
-                'is_required' => (bool)(int)($row['is_required'] ?? 0),
                 'product_types' => $attributeProductTypes,
                 'attribute_set_ids' => array_values($candidate['sets']),
                 'attribute_groups' => array_values($candidate['groups']),
@@ -407,7 +441,7 @@ class AttributeDictionaryService
     }
 
     /** @param array<int, array<string, mixed>> $sets @param array<string, array<string, mixed>> $items @return array<int, array<string, mixed>> */
-    private function buildAttributeSetTree(array $sets, array $items, bool $useAttributeIds = false): array
+    private function buildAttributeSetTree(array $sets, array $items, bool $v2Shape = false): array
     {
         foreach ($items as $item) {
             foreach ($item['attribute_groups'] ?? [] as $group) {
@@ -424,11 +458,9 @@ class AttributeDictionaryService
                         'id' => $groupId,
                         'name' => (string)($group['group'] ?? ''),
                         'attribute_codes' => [],
-                        'attribute_ids' => [],
                     ];
                 }
                 $sets[$setId]['groups'][$groupId]['attribute_codes'][] = (string)$item['code'];
-                $sets[$setId]['groups'][$groupId]['attribute_ids'][] = (int)$item['id'];
             }
         }
 
@@ -441,19 +473,14 @@ class AttributeDictionaryService
             foreach ($groups as &$group) {
                 $group['attribute_codes'] = array_values(array_unique($group['attribute_codes']));
                 sort($group['attribute_codes']);
-                $group['attribute_ids'] = array_values(array_unique(array_map('intval', $group['attribute_ids'])));
-                sort($group['attribute_ids']);
-                if ($useAttributeIds) {
-                    unset($group['attribute_codes']);
-                } else {
-                    unset($group['attribute_ids']);
+                if (!$v2Shape) {
                     // Compatibility alias for clients that consumed the first draft of this tree.
                     $group['attributes'] = $group['attribute_codes'];
                 }
             }
             unset($group);
             $set['groups'] = $groups;
-            if ($useAttributeIds) {
+            if ($v2Shape) {
                 unset($set['product_count']);
             }
             $tree[] = $set;
@@ -603,35 +630,29 @@ class AttributeDictionaryService
         return $productTypes;
     }
 
-    /** @param array<int, array<string, mixed>> $productTypes @param array<string, array<string, mixed>> $items @return array<int, array<string, mixed>> */
-    private function attachProductTypeAttributeIds(array $productTypes, array $items): array
+    /** @param array<int, array<string, mixed>> $productTypes @return array<int, array<string, mixed>> */
+    private function finalizeProductTypesForV2(array $productTypes): array
     {
         foreach ($productTypes as &$type) {
-            $codes = (array)($type['attribute_codes'] ?? []);
-            $type['attribute_ids'] = [];
-            foreach ($items as $item) {
-                if (in_array((string)($item['code'] ?? ''), $codes, true)) {
-                    $type['attribute_ids'][] = (int)$item['id'];
-                }
-            }
-            $type['attribute_ids'] = array_values(array_unique($type['attribute_ids']));
-            sort($type['attribute_ids']);
-            unset($type['attribute_codes'], $type['product_count']);
+            unset($type['product_count']);
+            $type['attribute_codes'] = array_values(array_unique((array)($type['attribute_codes'] ?? [])));
+            sort($type['attribute_codes']);
         }
         unset($type);
         return $productTypes;
     }
 
     /** @param array<string, array<string, mixed>> $items @return array<string, array<string, mixed>> */
-    private function attributesById(array $items): array
+    private function attributesByCode(array $items): array
     {
         $out = [];
         foreach ($items as $item) {
-            $id = (int)($item['id'] ?? 0);
-            if ($id > 0) {
-                unset($item['product_types'], $item['attribute_set_ids'], $item['attribute_groups']);
-                $out[(string)$id] = $item;
+            $code = (string)($item['code'] ?? '');
+            if ($code === '') {
+                continue;
             }
+            unset($item['product_types'], $item['attribute_set_ids'], $item['attribute_groups']);
+            $out[$code] = $item;
         }
         ksort($out, SORT_NATURAL);
         return $out;
