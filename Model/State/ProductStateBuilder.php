@@ -362,7 +362,13 @@ class ProductStateBuilder
             return [];
         }
         if (is_array($text)) {
-            return array_values(array_map(static fn (mixed $item): string => (string)$item, $text));
+            $labels = array_values(array_map(static fn (mixed $item): string => (string)$item, $text));
+            // getAttributeText() multiselect label order is not stable across builds (the option
+            // source's ordering/collation varies), which would make the content/seo state_hash
+            // unstable and emit phantom change events on every rebuild. Sort with a deterministic,
+            // locale-independent comparator (byte order) for a stable feed.
+            sort($labels, SORT_STRING);
+            return $labels;
         }
         return [(string)$text];
     }
