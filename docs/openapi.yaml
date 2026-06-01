@@ -1,0 +1,283 @@
+openapi: 3.0.3
+info:
+  title: Amida ProductDeltaFeed HTTP API
+  version: "1.0"
+  description: >
+    Public feed endpoints for the Amida_ProductDeltaFeed Magento module.
+    The binary `snapshot`/`changes` streams are protobuf+zstd by default and are described by
+    `proto/amida_product_delta_feed_v1.proto`; this document covers the JSON surface
+    (the `attributes`, `store`, `health`, `stats` endpoints and the `format=json` envelopes of
+    `snapshot`/`changes`). Access is gated by a per-store public key passed as a path segment.
+servers:
+  - url: https://{host}
+    variables:
+      host:
+        default: jan2-production.up.railway.app
+tags:
+  - name: dictionary
+  - name: feed
+  - name: ops
+
+paths:
+  /amidafeed/v1/attributes/key/{key}:
+    get:
+      tags: [dictionary]
+      summary: Product attribute dictionary (schema v2, JSON only)
+      parameters:
+        - $ref: '#/components/parameters/Key'
+        - $ref: '#/components/parameters/Store'
+        - name: codes
+          in: query
+          description: Comma-separated attribute codes to narrow the result.
+          schema: { type: string }
+        - name: load_options
+          in: query
+          description: Embed option lists. Default false; pass 1/true to include `options[]`.
+          schema: { type: boolean, default: false }
+        - name: all
+          in: query
+          description: Bypass the admin include/exclude config and return every attribute with a non-empty product value.
+          schema: { type: boolean, default: false }
+        - name: pretty
+          in: query
+          description: Indented JSON body.
+          schema: { type: boolean, default: false }
+        - name: schema
+          in: query
+          description: Response schema version. v2 (default, code-keyed) or v1 (legacy `items[]`).
+          schema: { type: string, enum: [v1, v2], default: v2 }
+      responses:
+        '200':
+          description: Attribute dictionary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttributesDictionaryV2' }
+        '404': { description: Not found / stream disabled }
+
+  /amidafeed/v1/snapshot/key/{key}/stream/{stream}:
+    get:
+      tags: [feed]
+      summary: Full current state for a stream (protobuf+zstd, or JSON with format=json)
+      parameters:
+        - $ref: '#/components/parameters/Key'
+        - $ref: '#/components/parameters/Stream'
+        - $ref: '#/components/parameters/Store'
+        - name: after_state_id
+          in: query
+          schema: { type: integer, format: int64, default: 0 }
+        - name: skus
+          in: query
+          description: Comma-separated SKUs for an explicit current-state lookup.
+          schema: { type: string }
+        - name: include_offer
+          in: query
+          schema: { type: boolean, default: false }
+        - $ref: '#/components/parameters/Format'
+      responses:
+        '200':
+          description: Snapshot batch
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SnapshotEnvelopeJson' }
+            application/x-protobuf:
+              schema: { type: string, format: binary }
+        '404': { description: Unknown or disabled stream }
+        '429': { description: Monopoly-request lock busy }
+
+  /amidafeed/v1/changes/key/{key}/stream/{stream}:
+    get:
+      tags: [feed]
+      summary: Incremental changes for a stream (protobuf+zstd, or JSON with format=json)
+      parameters:
+        - $ref: '#/components/parameters/Key'
+        - $ref: '#/components/parameters/Stream'
+        - $ref: '#/components/parameters/Store'
+        - name: after_event_id
+          in: query
+          schema: { type: integer, format: int64, default: 0 }
+        - name: changed_from
+          in: query
+          schema: { type: string }
+        - name: changed_to
+          in: query
+          schema: { type: string }
+        - name: skus
+          in: query
+          schema: { type: string }
+        - name: include_offer
+          in: query
+          schema: { type: boolean, default: false }
+        - $ref: '#/components/parameters/Format'
+      responses:
+        '200':
+          description: Changes batch
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangesEnvelopeJson' }
+            application/x-protobuf:
+              schema: { type: string, format: binary }
+        '404': { description: Unknown or disabled stream }
+        '429': { description: Monopoly-request lock busy }
+
+  /amidafeed/v1/store/key/{key}:
+    get:
+      tags: [ops]
+      summary: Store passport metadata (JSON only)
+      parameters:
+        - $ref: '#/components/parameters/Key'
+        - $ref: '#/components/parameters/Store'
+        - { name: scope, in: query, schema: { type: string, default: group } }
+        - { name: include_pages, in: query, schema: { type: boolean, default: true } }
+        - { name: include_counts, in: query, schema: { type: boolean, default: true } }
+        - { name: include_sitemap, in: query, schema: { type: boolean, default: true } }
+        - { name: include_sources, in: query, schema: { type: boolean, default: false } }
+      responses:
+        '200':
+          description: Store metadata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StoreMetadata' }
+
+  /amidafeed/v1/health/key/{key}:
+    get:
+      tags: [ops]
+      summary: Health diagnostics (JSON only)
+      parameters: [ { $ref: '#/components/parameters/Key' } ]
+      responses:
+        '200':
+          description: Health
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+  /amidafeed/v1/stats/key/{key}:
+    get:
+      tags: [ops]
+      summary: Feed statistics (JSON only)
+      parameters: [ { $ref: '#/components/parameters/Key' } ]
+      responses:
+        '200':
+          description: Stats
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+components:
+  parameters:
+    Key:
+      name: key
+      in: path
+      required: true
+      description: Per-store public feed key (isolation key, not a private credential).
+      schema: { type: string }
+    Stream:
+      name: stream
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [content, seo, price, availability, category, categories, curated, offer, all]
+    Store:
+      name: store
+      in: query
+      description: Store view code. Defaults to the default store view.
+      schema: { type: string }
+    Format:
+      name: format
+      in: query
+      description: Response format. Default is protobuf+zstd; `json` returns the JSON envelope.
+      schema: { type: string, enum: [json], }
+  schemas:
+    AttributesDictionaryV2:
+      type: object
+      properties:
+        schema_version: { type: integer, example: 2 }
+        entity: { type: string, example: attributes }
+        store_code: { type: string }
+        attributes:
+          type: object
+          description: Map keyed by attribute code.
+          additionalProperties: { $ref: '#/components/schemas/AttributeEntry' }
+        attribute_sets:
+          type: array
+          items: { type: object }
+        product_types:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              label: { type: string }
+              attribute_codes: { type: array, items: { type: string } }
+        diagnostics: { type: array, items: { $ref: '#/components/schemas/Diagnostic' } }
+    AttributeEntry:
+      type: object
+      properties:
+        code: { type: string }
+        label: { type: string }
+        labels: { type: object, additionalProperties: { type: string } }
+        kind: { type: string }
+        unit: { type: string, nullable: true }
+        is_filterable: { type: boolean }
+        is_searchable: { type: boolean }
+        options_count: { type: integer, description: Present only when options are not loaded. }
+        options:
+          type: array
+          description: Present only with load_options=1.
+          items: { type: object }
+    SnapshotEnvelopeJson:
+      type: object
+      properties:
+        schema_version: { type: integer, example: 1 }
+        stream: { type: string }
+        store_code: { type: string }
+        from_state_id: { type: integer, format: int64 }
+        to_state_id: { type: integer, format: int64 }
+        has_more: { type: boolean }
+        changes_highwater_event_id: { type: integer, format: int64 }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/SnapshotItem' }
+        diagnostics: { type: array, items: { $ref: '#/components/schemas/Diagnostic' } }
+    SnapshotItem:
+      type: object
+      properties:
+        state_id: { type: integer, format: int64 }
+        product_id: { type: integer, format: int64 }
+        sku: { type: string }
+        stream: { type: string }
+        store_code: { type: string }
+        updated_at: { type: string }
+        state_hash: { type: string }
+        payload:
+          type: object
+          description: Per-stream payload. For `curated` see CuratedProduct.
+    ChangesEnvelopeJson:
+      type: object
+      properties:
+        schema_version: { type: integer, example: 1 }
+        stream: { type: string }
+        store_code: { type: string }
+        from_event_id: { type: integer, format: int64 }
+        to_event_id: { type: integer, format: int64 }
+        has_more: { type: boolean }
+        cursor_expired: { type: boolean }
+        changes:
+          type: array
+          items: { type: object }
+        diagnostics: { type: array, items: { $ref: '#/components/schemas/Diagnostic' } }
+    StoreMetadata:
+      type: object
+      additionalProperties: true
+      properties:
+        schema_version: { type: integer }
+        entity: { type: string, example: store }
+        store: { type: object, additionalProperties: true }
+    Diagnostic:
+      type: object
+      properties:
+        code: { type: string }
+        message: { type: string }
+        sku: { type: string }
+        event_id: { type: integer, format: int64 }
+        category_id: { type: integer, format: int64 }

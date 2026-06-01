@@ -10,23 +10,6 @@ use Magento\Store\Model\StoreManagerInterface;
 
 class AttributeDictionaryService
 {
-    /**
-     * Core/base attribute codes that are always exported, even when they are not part of the
-     * admin include list (content/include_attributes). The ?all=1 path is unaffected.
-     *
-     * @var string[]
-     */
-    private const BASE_ATTRIBUTE_CODES = [
-        'sku',
-        'image',
-        'created_at',
-        'updated_at',
-        'name',
-        'description',
-        'short_description',
-        'url_key',
-    ];
-
     /** @var array<string, string> */
     private array $tableColumns = [];
 
@@ -127,11 +110,9 @@ class AttributeDictionaryService
                 $select->where('a.attribute_code IN (?)', $codes);
             }
         } else {
-            // Config selection (include/exclude) plus the always-on base attribute codes.
-            $allowedCodes = array_values(array_unique(array_merge(
-                $this->attributeSelector->getContentAttributeCodes(),
-                self::BASE_ATTRIBUTE_CODES
-            )));
+            // Config selection (include/exclude) including the always-on base attribute codes
+            // (both provided by AttributeSelector so the content stream and dictionary match).
+            $allowedCodes = $this->attributeSelector->getContentAttributeCodes();
             $effectiveCodes = $codes !== []
                 ? array_values(array_intersect($codes, $allowedCodes))
                 : $allowedCodes;

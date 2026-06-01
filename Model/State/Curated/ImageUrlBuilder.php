@@ -3,14 +3,17 @@ declare(strict_types=1);
 
 namespace Amida\ProductDeltaFeed\Model\State\Curated;
 
+use Amida\ProductDeltaFeed\Model\Config;
 use Magento\Catalog\Model\Product;
 use Magento\Framework\UrlInterface;
 use Magento\Store\Model\StoreManagerInterface;
 
 class ImageUrlBuilder
 {
-    public function __construct(private readonly StoreManagerInterface $storeManager)
-    {
+    public function __construct(
+        private readonly StoreManagerInterface $storeManager,
+        private readonly Config $config
+    ) {
     }
 
     /**
@@ -47,7 +50,7 @@ class ImageUrlBuilder
             return [];
         }
 
-        $baseMediaUrl = rtrim((string)$this->storeManager->getStore($storeCode)->getBaseUrl(UrlInterface::URL_TYPE_MEDIA), '/') . '/';
+        $baseMediaUrl = $this->mediaBaseUrl($storeCode);
 
         return array_map(
             static function (string $file) use ($baseMediaUrl): string {
@@ -59,6 +62,21 @@ class ImageUrlBuilder
             },
             $files
         );
+    }
+
+    /**
+     * Media base URL for absolute image links: the configured feed domain when set
+     * (e.g. a production CDN/host), otherwise the store's own media base URL.
+     */
+    private function mediaBaseUrl(string $storeCode): string
+    {
+        $domain = $this->config->getFeedDomain($storeCode);
+        if ($domain !== '') {
+            $base = preg_match('#^https?://#i', $domain) === 1 ? rtrim($domain, '/') : 'https://' . rtrim($domain, '/');
+            return $base . '/media/';
+        }
+
+        return rtrim((string)$this->storeManager->getStore($storeCode)->getBaseUrl(UrlInterface::URL_TYPE_MEDIA), '/') . '/';
     }
 
     private function normalizeFile(string $file): ?string

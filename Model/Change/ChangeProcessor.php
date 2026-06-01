@@ -174,6 +174,11 @@ class ChangeProcessor
                 if (!$this->config->isStreamEnabled($stream)) {
                     continue;
                 }
+                if ($stream === 'curated' && ($currentStates['meta']['curated_excluded'] ?? false)) {
+                    // Configurable parents are excluded from curated: no event, no snapshot row.
+                    // A full snapshot rebuild drops any pre-existing curated row for them.
+                    continue;
+                }
                 if (!$forceFull && !$this->shouldEvaluateStream($stream, $reasonFlags)) {
                     continue;
                 }

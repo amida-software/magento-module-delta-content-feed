@@ -4,18 +4,13 @@ declare(strict_types=1);
 namespace Amida\ProductDeltaFeed\Test\Unit\Model\Feed;
 
 use Amida\ProductDeltaFeed\Model\Feed\CuratedParentInheritance;
-use Amida\ProductDeltaFeed\Model\ResourceModel\StateSnapshot;
-use Magento\Framework\App\ResourceConnection;
 use PHPUnit\Framework\TestCase;
 
 class CuratedParentInheritanceTest extends TestCase
 {
     private function service(): CuratedParentInheritance
     {
-        return new CuratedParentInheritance(
-            $this->createMock(ResourceConnection::class),
-            $this->createMock(StateSnapshot::class)
-        );
+        return new CuratedParentInheritance();
     }
 
     public function testInheritFillsOnlyEmptyInheritableFields(): void

@@ -37,8 +37,8 @@ class CuratedProductBuilder
                 'prices' => $prices,
                 'availability' => $this->normalizeAvailability($availability),
                 'name' => $this->stringOrNull($product->getData('name')),
-                'description' => $this->stringOrNull($product->getData('description')),
-                'short_description' => $this->stringOrNull($product->getData('short_description')),
+                'description' => $this->stripHtmlOrNull($product->getData('description')),
+                'short_description' => $this->stripHtmlOrNull($product->getData('short_description')),
                 'url_key' => $this->stringOrNull($product->getData('url_key')),
                 'images' => $this->imageUrlBuilder->getImageUrls($product, $storeCode),
                 'brand' => $this->firstLabel($this->safeAttributeText($product, 'manufacturer')) ?? $this->stringOrNull($product->getData('manufacturer')),
@@ -189,6 +189,22 @@ class CuratedProductBuilder
         }
 
         return (string)$value;
+    }
+
+    /** Strip HTML tags/entities to plain text (no truncation). Returns null when empty. */
+    private function stripHtmlOrNull(mixed $value): ?string
+    {
+        if ($value === null || $value === false) {
+            return null;
+        }
+        $text = (string)$value;
+        $text = preg_replace('#<(script|style)\b[^>]*>.*?</\1>#is', ' ', $text) ?? $text;
+        $text = preg_replace('#<[^>]+>#', ' ', $text) ?? $text;
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
+        $text = trim($text);
+
+        return $text === '' ? null : $text;
     }
 
     private function floatOrNull(mixed $value): ?float

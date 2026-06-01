@@ -42,6 +42,7 @@ class Config
     public const XML_PATH_API_REQUEST_MONOPOLY_ENABLED = 'amida_productdeltafeed/general/api_request_monopoly_enabled';
     public const XML_PATH_API_REQUEST_TIMEOUT_SECONDS = 'amida_productdeltafeed/general/api_request_timeout_seconds';
     public const XML_PATH_PUBLIC_KEY = 'amida_productdeltafeed/general/public_key';
+    public const XML_PATH_FEED_DOMAIN = 'amida_productdeltafeed/general/feed_domain';
     public const XML_PATH_ZSTD_ENABLED = 'amida_productdeltafeed/general/zstd_enabled';
     public const XML_PATH_ZSTD_LEVEL = 'amida_productdeltafeed/general/zstd_level';
     public const XML_PATH_MAX_BATCH_SIZE = 'amida_productdeltafeed/general/max_batch_size_bytes';
@@ -433,6 +434,15 @@ class Config
         $value = $this->scopeConfig->getValue($path, ScopeInterface::SCOPE_WEBSITES, $scopeCode);
 
         return $value !== null && $value !== '' ? $value : $default;
+    }
+
+    /**
+     * Optional override host/base for absolute URLs emitted in the feed (images, category URLs).
+     * Empty string means "use the store's own base URL". Configured per deploy in app/etc/config.php.
+     */
+    public function getFeedDomain(?string $scopeCode = null): string
+    {
+        return trim((string)$this->getValue(self::XML_PATH_FEED_DOMAIN, $scopeCode, ''));
     }
 
     /**

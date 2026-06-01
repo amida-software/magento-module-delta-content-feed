@@ -38,6 +38,11 @@
                     <comment>Leave empty and save to auto-generate a random key. This is an isolation key, not a private API credential.</comment>
                     <backend_model>Amida\ProductDeltaFeed\Model\Config\Backend\GeneratePublicKey</backend_model>
                 </field>
+                <field id="feed_domain" translate="label comment" type="text" sortOrder="45"
+                       showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Feed domain override</label>
+                    <comment>Optional host (e.g. cdn.example.com) used for absolute URLs in the feed (images, category URLs). Empty = use the store base URL. Usually set per deploy in app/etc/config.php.</comment>
+                </field>
                 <field id="zstd_enabled" translate="label comment" type="select" sortOrder="50"
                        showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Enable zstd compression</label>

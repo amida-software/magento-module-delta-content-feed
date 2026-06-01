@@ -9,6 +9,7 @@
                 <api_request_monopoly_enabled>1</api_request_monopoly_enabled>
                 <api_request_timeout_seconds>5</api_request_timeout_seconds>
                 <public_key></public_key>
+                <feed_domain></feed_domain>
                 <zstd_enabled>1</zstd_enabled>
                 <zstd_level>3</zstd_level>
                 <max_batch_size_bytes>2097152</max_batch_size_bytes>

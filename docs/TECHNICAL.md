@@ -68,7 +68,15 @@ The `curated` stream is a flat list of sellable simple/child products:
 - **Children inherit from their configurable parent** every field below that is empty on the child: `category_ids`, `images`, `description`, `short_description`, `url_key`, `brand`, `product_type`, `notes`, `related_products`. Never inherited (always the child's own values): `sku`, `name`, `prices`, `availability`, `magento_type_id`. The parent is resolved via `catalog_product_super_link`, reusing the parent's stored curated state.
 - `description` and `short_description` are **HTML-stripped** to plain text.
 
-These three normalizations are currently applied at **snapshot read time** (`Model/Feed/SnapshotService::rowToItem` + `Model/Feed/CuratedParentInheritance`), so they take effect on already-stored states without a snapshot rebuild. Caveat: the `changes` stream (`Model/Feed/ChangesService`) does not yet apply them and returns the raw stored curated payload, so `snapshot` and `changes` are not byte-identical for `curated` until this is unified at build time.
+These three normalizations are applied at **state-build time** (`Model/State/ProductStateBuilder` + `Model/State/CuratedProductBuilder` + `Model/Feed/CuratedParentInheritance`), so the stored `curated` state, its `state_hash`, the `snapshot` stream and the `changes` stream are all consistent. Because inheritance is baked into the child's stored state, a configurable parent change must re-emit its children: `Observer/ProductSaveAfterObserver` enqueues every child of a saved configurable with `ReasonFlags::FORCE_COMPARE` so the inherited fields stay current in the delta stream. Switching these rules on requires one `snapshot:rebuild` to re-normalize already-stored states.
+
+### Attribute selection and feed URLs
+
+- The `content` stream and the attributes dictionary share one selection (`Model/AttributeSelector`): the admin include list (`content/include_attributes`) when set, otherwise **filterable attributes** (`catalog_eav_attribute.is_filterable = 1`) minus the excluded/reserved/seo/price codes. A fixed set of **base codes** (`sku, image, created_at, updated_at, name, description, short_description, url_key`) is always added on top — everywhere.
+- Per-deploy values are committed in `app/etc/config.php` (version-controlled), e.g. jan pins its `content/include_attributes` there rather than only in the DB.
+- Absolute URLs in the feed (images, category URLs) use the optional `general/feed_domain` override when set, otherwise the store base URL. jan sets it to its production host in `app/etc/config.php`.
+
+The JSON HTTP surface is described by `docs/openapi.yaml`; the binary streams by `proto/amida_product_delta_feed_v1.proto` (kept in sync with `Model/Feed/FeedEncoder` by `tools/proto_encoder_parity.php`). Module distribution / drift is discussed in `docs/DISTRIBUTION.md`.
 
 ## Tests
 

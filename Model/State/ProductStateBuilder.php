@@ -11,11 +11,15 @@ use Magento\Framework\App\ResourceConnection;
 use Magento\Store\Model\StoreManagerInterface;
 use Amida\ProductDeltaFeed\Model\AttributeSelector;
 use Amida\ProductDeltaFeed\Model\Config;
+use Amida\ProductDeltaFeed\Model\Feed\CuratedParentInheritance;
 use Amida\ProductDeltaFeed\Model\Offer\DirectSqlOfferProvider;
 use Amida\ProductDeltaFeed\Model\State\CuratedProductBuilder;
 
 class ProductStateBuilder
 {
+    /** @var array<string, array<string, mixed>|null> parent curated payloads memoised per request */
+    private array $parentCuratedCache = [];
+
     public function __construct(
         private readonly ProductRepositoryInterface $productRepository,
         private readonly AttributeSelector $attributeSelector,
@@ -24,7 +28,8 @@ class ProductStateBuilder
         private readonly DirectSqlOfferProvider $offerProvider,
         private readonly ResourceConnection $resourceConnection,
         private readonly StoreManagerInterface $storeManager,
-        private readonly CuratedProductBuilder $curatedProductBuilder
+        private readonly CuratedProductBuilder $curatedProductBuilder,
+        private readonly CuratedParentInheritance $parentInheritance
     ) {
     }
 
@@ -46,6 +51,22 @@ class ProductStateBuilder
         $price = $this->priceStateFromOffer($offerData);
         $availability = $this->availabilityStateFromOffer($offerData, $enabled);
 
+        // Configurable parents are excluded from the curated stream; their child variations carry
+        // the data and inherit the parent's empty fields. Built once at state-build time so the
+        // stored state, its hash, snapshot and changes all stay consistent.
+        $isConfigurable = (string)$product->getTypeId() === 'configurable';
+        $curated = null;
+        if (!$isConfigurable) {
+            $curated = $this->curatedProductBuilder->build($product, $storeCode, [
+                'offer' => $offerData,
+                'availability' => $availability,
+            ]);
+            $parentCurated = $this->parentCuratedFor($productId, $storeCode);
+            if ($parentCurated !== null && isset($curated['curated']) && is_array($curated['curated'])) {
+                $curated['curated'] = $this->parentInheritance->inherit($curated['curated'], $parentCurated);
+            }
+        }
+
         return [
             'meta' => [
                 'product_id' => $productId,
@@ -53,6 +74,7 @@ class ProductStateBuilder
                 'enabled' => $enabled,
                 'source_updated_at' => $sourceUpdatedAt,
                 'store_code' => $storeCode,
+                'curated_excluded' => $isConfigurable,
             ],
             'content' => [
                 'enabled' => $enabled,
@@ -80,11 +102,63 @@ class ProductStateBuilder
                 'category' => $this->buildCategoryState($productId),
                 'deleted' => false,
             ],
-            'curated' => $this->curatedProductBuilder->build($product, $storeCode, [
-                'offer' => $offerData,
-                'availability' => $availability,
-            ]),
+            'curated' => $curated,
         ];
+    }
+
+    /**
+     * Curated payload of the configurable parent of a child product, memoised per request.
+     * Inheritable fields (category/images/description/etc.) do not depend on price/availability,
+     * so the parent is built with an empty offer context.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function parentCuratedFor(int $childId, string $storeCode): ?array
+    {
+        $parentId = $this->resolveConfigurableParentId($childId);
+        if ($parentId === null) {
+            return null;
+        }
+        $key = $parentId . '@' . $storeCode;
+        if (!array_key_exists($key, $this->parentCuratedCache)) {
+            $this->parentCuratedCache[$key] = $this->buildParentCurated($parentId, $storeCode);
+        }
+
+        return $this->parentCuratedCache[$key];
+    }
+
+    private function resolveConfigurableParentId(int $childId): ?int
+    {
+        $connection = $this->resourceConnection->getConnection();
+        $superLink = $this->resourceConnection->getTableName('catalog_product_super_link');
+        $parentId = $connection->fetchOne(
+            $connection->select()
+                ->from($superLink, 'parent_id')
+                ->where('product_id = ?', $childId)
+                ->order('parent_id ASC')
+                ->limit(1)
+        );
+
+        return $parentId ? (int)$parentId : null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildParentCurated(int $parentId, string $storeCode): ?array
+    {
+        try {
+            $store = $this->storeManager->getStore($storeCode);
+            $parent = $this->productRepository->getById($parentId, false, (int)$store->getId(), true);
+        } catch (\Throwable) {
+            return null;
+        }
+        if ((string)$parent->getTypeId() !== 'configurable') {
+            return null;
+        }
+        $built = $this->curatedProductBuilder->build($parent, $storeCode, []);
+
+        return isset($built['curated']) && is_array($built['curated']) ? $built['curated'] : null;
     }
 
     /**

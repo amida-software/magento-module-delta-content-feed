@@ -42,7 +42,11 @@ See [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ## Protobuf schema
 
-See [proto/amida_product_delta_feed_v1.proto](proto/amida_product_delta_feed_v1.proto).
+See [proto/amida_product_delta_feed_v1.proto](proto/amida_product_delta_feed_v1.proto). The hand-written encoder is kept in parity with the schema by `tools/proto_encoder_parity.php`.
+
+## HTTP API (OpenAPI)
+
+The JSON endpoints (`attributes`, `store`, `health`, `stats`, and the `format=json` envelopes of `snapshot`/`changes`) are described in [docs/openapi.yaml](docs/openapi.yaml).
 
 ## Specification
 
