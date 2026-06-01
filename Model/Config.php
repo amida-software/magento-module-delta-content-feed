@@ -442,7 +442,17 @@ class Config
      */
     public function getFeedDomain(?string $scopeCode = null): string
     {
-        return trim((string)$this->getValue(self::XML_PATH_FEED_DOMAIN, $scopeCode, ''));
+        // Callers pass a store code (image/category URLs are built per store). Read at store scope so
+        // the store -> website -> default fallback resolves the deploy-wide value configured in
+        // app/etc/config.php (system/default/...). Magento's scope fallback only builds entries for
+        // valid websites, so reading a store code at SCOPE_WEBSITES would miss; fall back to an
+        // explicit default-scope read for a null/unresolvable code.
+        $value = $this->scopeConfig->getValue(self::XML_PATH_FEED_DOMAIN, ScopeInterface::SCOPE_STORES, $scopeCode);
+        if ($value === null || $value === '') {
+            $value = $this->scopeConfig->getValue(self::XML_PATH_FEED_DOMAIN);
+        }
+
+        return trim((string)$value);
     }
 
     /**

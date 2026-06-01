@@ -144,18 +144,23 @@ class CuratedProductBuilder
     private function labels(mixed $text, mixed $rawValue): array
     {
         $labels = $this->normalizeLabels($text);
-        if ($labels !== []) {
-            return $labels;
+        if ($labels === []) {
+            if ($rawValue === null || $rawValue === '') {
+                return [];
+            }
+            $labels = array_values(array_filter(
+                array_map('trim', explode(',', (string)$rawValue)),
+                static fn (string $value): bool => $value !== ''
+            ));
         }
 
-        if ($rawValue === null || $rawValue === '') {
-            return [];
-        }
+        // Multiselect label order from getAttributeText() is not stable across builds (the option
+        // source's ordering/collation varies), which would make the curated state_hash unstable and
+        // emit phantom change events on every rebuild. Sort with a deterministic, locale-independent
+        // comparator (byte order, which also matches values already persisted) for a stable feed.
+        sort($labels, SORT_STRING);
 
-        return array_values(array_filter(
-            array_map('trim', explode(',', (string)$rawValue)),
-            static fn (string $value): bool => $value !== ''
-        ));
+        return $labels;
     }
 
     private function firstLabel(mixed $text): ?string

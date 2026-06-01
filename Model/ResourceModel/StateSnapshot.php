@@ -54,6 +54,15 @@ class StateSnapshot
         $this->resourceConnection->getConnection()->delete($this->getTable(), ['entity_id = ?' => $productId]);
     }
 
+    public function deleteProductStream(int $productId, string $storeCode, string $stream): void
+    {
+        $this->resourceConnection->getConnection()->delete($this->getTable(), [
+            'entity_id = ?' => $productId,
+            'store_code = ?' => $storeCode,
+            'stream_code = ?' => $stream,
+        ]);
+    }
+
     /**
      * @param string[] $skus
      * @return array<int, array<string, mixed>>

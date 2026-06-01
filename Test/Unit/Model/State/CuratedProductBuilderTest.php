@@ -149,4 +149,33 @@ class CuratedProductBuilderTest extends TestCase
         self::assertSame('Long perfume description', $payload['curated']['description']);
         self::assertSame('Short & sweet', $payload['curated']['short_description']);
     }
+
+    public function testSortsMultiselectNotesDeterministically(): void
+    {
+        // getAttributeText() returns multiselect labels in an order that is not stable across builds
+        // (option source ordering/collation varies). The curated notes must be sorted deterministically
+        // so the stored state_hash is stable and no phantom change events are emitted.
+        $product = $this->createMock(Product::class);
+        $product->method('getId')->willReturn(10);
+        $product->method('getSku')->willReturn('SKU-10');
+        $product->method('getTypeId')->willReturn('simple');
+        $product->method('getData')->willReturnCallback(static function (string $code): mixed {
+            return ['name' => 'Idole', 'notes' => '8,20,5', 'status' => 1][$code] ?? null;
+        });
+        $product->method('getAttributeText')->willReturnCallback(static function (string $code): mixed {
+            return $code === 'notes' ? ['sandal', 'amber', 'cumin'] : null;
+        });
+
+        $categoryProvider = $this->createMock(CategoryProvider::class);
+        $categoryProvider->method('getCategories')->willReturn([]);
+        $imageUrlBuilder = $this->createMock(ImageUrlBuilder::class);
+        $imageUrlBuilder->method('getImageUrls')->willReturn([]);
+        $relatedProductProvider = $this->createMock(RelatedProductProvider::class);
+        $relatedProductProvider->method('getRelatedProducts')->willReturn([]);
+
+        $builder = new CuratedProductBuilder($categoryProvider, $imageUrlBuilder, $relatedProductProvider);
+        $payload = $builder->build($product, 'ua', []);
+
+        self::assertSame(['amber', 'cumin', 'sandal'], $payload['curated']['notes']);
+    }
 }

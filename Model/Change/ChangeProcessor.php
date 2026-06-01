@@ -175,8 +175,24 @@ class ChangeProcessor
                     continue;
                 }
                 if ($stream === 'curated' && ($currentStates['meta']['curated_excluded'] ?? false)) {
-                    // Configurable parents are excluded from curated: no event, no snapshot row.
-                    // A full snapshot rebuild drops any pre-existing curated row for them.
+                    // Configurable parents are excluded from curated. If a curated row exists from
+                    // before (e.g. the product became configurable, or pre-exclusion data), tombstone
+                    // it and delete it so the incremental path cleans up — not only a full rebuild.
+                    if (isset($previousStates['curated'])) {
+                        $this->appendEvent(
+                            $eventRows,
+                            'curated',
+                            'curated',
+                            $productId,
+                            (string)$currentStates['meta']['sku'],
+                            $storeCode,
+                            'TOMBSTONE',
+                            ['deleted'],
+                            $this->emptyPayload('curated', true),
+                            $currentStates['meta']['source_updated_at']
+                        );
+                        $this->stateSnapshot->deleteProductStream($productId, $storeCode, 'curated');
+                    }
                     continue;
                 }
                 if (!$forceFull && !$this->shouldEvaluateStream($stream, $reasonFlags)) {
