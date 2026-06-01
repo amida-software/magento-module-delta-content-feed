@@ -1,3 +1,9 @@
+# Current production API note
+
+This document contains historical design sections. The current production API contract is `docs/openapi.yaml` plus `docs/TZ_PRODUCTION_API_CONSISTENCY.md`. Public product streams are now `content`, `category`, `curated`, `offer`, `categories`, `attributes`, and `all`. Legacy standalone `seo`, `price`, and `availability` streams are removed from the public API: SEO text belongs to `content`; price and stock belong to `offer`.
+
+---
+
 # ТЗ: Magento-модуль публичной инкрементальной выгрузки товаров в Protobuf+ZSTD
 
 **Дата:** 2026-03-30  

@@ -6,6 +6,7 @@ namespace Amida\ProductDeltaFeed\Controller\V1;
 use Amida\ProductDeltaFeed\Model\Config;
 use Amida\ProductDeltaFeed\Model\Feed\ApiRequestGate;
 use Amida\ProductDeltaFeed\Model\Feed\ZstdCompressor;
+use Amida\ProductDeltaFeed\Model\Feed\OpenApiDocumentEncoder;
 use Amida\ProductDeltaFeed\Model\Store\StoreMetadataService;
 use Amida\ProductDeltaFeed\Model\StoreScopeResolver;
 use Magento\Framework\App\Action\Context;
@@ -23,9 +24,10 @@ class Store extends AbstractFeedAction
         StoreScopeResolver $storeScopeResolver,
         ZstdCompressor $compressor,
         ApiRequestGate $requestGate,
+        OpenApiDocumentEncoder $openApiDocumentEncoder,
         private readonly StoreMetadataService $storeMetadataService
     ) {
-        parent::__construct($context, $rawFactory, $jsonFactory, $config, $storeScopeResolver, $compressor, $requestGate);
+        parent::__construct($context, $rawFactory, $jsonFactory, $config, $storeScopeResolver, $compressor, $requestGate, $openApiDocumentEncoder);
     }
 
     public function execute(): ResultInterface
@@ -35,16 +37,19 @@ class Store extends AbstractFeedAction
             return $this->invalidResponse(404, 'Not found');
         }
 
-        $storeCode = $this->resolveStoreCode();
-        if ($storeCode === null) {
-            return $this->invalidResponse(400, 'Invalid store code');
+        $invalidStore = $this->invalidRequestedStoreResponse();
+        if ($invalidStore !== null) {
+            return $invalidStore;
         }
+        $requestedStoreCode = $this->resolveRequestedStoreCode();
+        $storeCode = $requestedStoreCode ?? $this->storeScopeResolver->getDefaultStoreCode();
         if (!$this->config->isStoreEndpointEnabled($storeCode)) {
             return $this->invalidResponse(404, 'Store endpoint is disabled');
         }
 
         $options = [
-            'scope' => (string)$this->getRequest()->getParam('scope', 'group'),
+            'scope' => (string)$this->getRequest()->getParam('scope', $requestedStoreCode === null ? 'all' : 'group'),
+            'store_scope' => $requestedStoreCode === null ? 'all' : 'single',
             'include_pages' => $this->boolParam('include_pages', true),
             'include_counts' => $this->boolParam('include_counts', true),
             'include_sitemap' => $this->boolParam('include_sitemap', true),
@@ -53,7 +58,22 @@ class Store extends AbstractFeedAction
             'include_sources' => $this->boolParam('include_sources', false),
         ];
 
-        return $this->jsonResponse($this->storeMetadataService->build($storeCode, $options));
+        $payload = $this->storeMetadataService->build($storeCode, $options);
+        if ($requestedStoreCode === null) {
+            $payload['requested_store_code'] = null;
+            $payload['store_scope'] = 'all';
+        } else {
+            $payload['requested_store_code'] = $requestedStoreCode;
+            $payload['store_scope'] = 'single';
+        }
+
+        return $this->openApiDocumentResponse(
+            $payload,
+            'store',
+            '/amidafeed/v1/store/key/{key}',
+            '#/components/schemas/StoreMetadata',
+            true
+        );
     }
 
     private function boolParam(string $name, bool $default): bool

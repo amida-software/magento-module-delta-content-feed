@@ -1,3 +1,9 @@
+# Current production API note
+
+Current API consistency rules are defined in `docs/openapi.yaml` and `docs/TZ_PRODUCTION_API_CONSISTENCY.md`. SEO text is part of `content`; price and availability are exported through `offer`; every public method supports JSON and protobuf transport. Older mentions of standalone `seo`, `price`, or `availability` streams in this file are historical.
+
+---
+
 # Technical design
 
 ## Hot path

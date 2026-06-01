@@ -26,4 +26,17 @@ class StoreControllerTest extends AbstractFeedControllerTest
         self::assertSame('Demo description', $payload['store']['description']);
         self::assertArrayHasKey('source_map', $payload);
     }
+
+    public function testStoreEndpointSupportsProtobufWrapperAndOptionalStore(): void
+    {
+        $this->configWriter->save(Config::XML_PATH_STORE_ENDPOINT_ENABLED, 1);
+        $this->cacheTypeList->cleanType('config');
+
+        $this->dispatch('amidafeed/v1/store/key/integration-key?include_counts=0&include_sitemap=0&include_pages=0&format=protobuf');
+        self::assertSame(200, $this->getResponse()->getHttpResponseCode());
+        self::assertStringContainsString('application/x-protobuf', (string)$this->getResponse()->getHeader('Content-Type')->getFieldValue());
+        self::assertStringContainsString('OpenApiDocument', (string)$this->getResponse()->getHeader('X-Amida-Protobuf-Message')->getFieldValue());
+        self::assertNotSame('', $this->getResponse()->getBody());
+    }
+
 }

@@ -60,7 +60,7 @@ class SnapshotServiceTest extends TestCase
                 ],
             ]);
         $this->changeLog->method('getLastEventId')->willReturn(77);
-        $this->encoder->method('encodeSnapshotEnvelope')->willReturnOnConsecutiveCalls('pb-10', 'pb-11');
+        $this->encoder->method('encodeSnapshotEnvelope')->willReturnOnConsecutiveCalls('pb-10', 'pb-11', 'pb-final');
         $this->compressor->method('compress')->willReturnCallback(static fn (string $payload): string => $payload);
         $this->compressor->method('isEnabled')->willReturn(false);
 
@@ -75,7 +75,7 @@ class SnapshotServiceTest extends TestCase
 
         $result = $service->build('content', 'default', 0);
 
-        self::assertSame('pb-11', $result['body']);
+        self::assertSame('pb-final', $result['body']);
         self::assertSame('11', $result['headers']['X-Amida-To-State-Id']);
         self::assertSame('0', $result['headers']['X-Amida-From-State-Id']);
         self::assertSame('77', $result['headers']['X-Amida-Changes-Highwater-Event-Id']);
@@ -143,7 +143,7 @@ class SnapshotServiceTest extends TestCase
                 ],
             ]);
         $this->changeLog->method('getLastEventId')->willReturn(99);
-        $this->encoder->expects(self::once())
+        $this->encoder->expects(self::atLeastOnce())
             ->method('encodeSnapshotEnvelope')
             ->willReturnCallback(function (array $meta, array $items, array $diagnostics): string {
                 self::assertSame('content', $meta['stream']);

@@ -31,7 +31,7 @@ class CategoryChangeLog
      * @return array<int, array<string, mixed>>
      */
     public function fetchChanges(
-        string $storeCode,
+        ?string $storeCode,
         int $afterEventId,
         int $limit,
         ?string $changedFrom = null,
@@ -41,11 +41,13 @@ class CategoryChangeLog
         $connection = $this->resourceConnection->getConnection();
         $select = $connection->select()
             ->from($this->getTable())
-            ->where('store_code = ?', $storeCode)
             ->where('event_id > ?', $afterEventId)
             ->order('event_id ASC')
             ->limit($limit);
 
+        if ($storeCode !== null) {
+            $select->where('store_code = ?', $storeCode);
+        }
         if ($changedFrom !== null && $changedFrom !== '') {
             $select->where('created_at >= ?', $changedFrom);
         }

@@ -12,6 +12,7 @@ use Magento\Framework\Controller\Result\RawFactory;
 use Amida\ProductDeltaFeed\Model\Config;
 use Amida\ProductDeltaFeed\Model\Feed\ApiRequestGate;
 use Amida\ProductDeltaFeed\Model\Feed\RequestDroppedException;
+use Amida\ProductDeltaFeed\Model\Feed\OpenApiDocumentEncoder;
 use Amida\ProductDeltaFeed\Model\Feed\ZstdCompressor;
 use Amida\ProductDeltaFeed\Model\StoreScopeResolver;
 
@@ -24,7 +25,8 @@ abstract class AbstractFeedAction extends Action
         protected readonly Config $config,
         protected readonly StoreScopeResolver $storeScopeResolver,
         protected readonly ZstdCompressor $compressor,
-        protected readonly ApiRequestGate $requestGate
+        protected readonly ApiRequestGate $requestGate,
+        protected readonly OpenApiDocumentEncoder $openApiDocumentEncoder
     ) {
         parent::__construct($context);
     }
@@ -45,8 +47,95 @@ abstract class AbstractFeedAction extends Action
 
     protected function resolveStoreCode(): ?string
     {
-        $storeCode = trim((string)$this->getRequest()->getParam('store', $this->storeScopeResolver->getDefaultStoreCode()));
+        return $this->resolveRequestedStoreCode();
+    }
+
+    protected function requestedStoreCode(): ?string
+    {
+        $value = $this->getRequest()->getParam('store', null);
+        if ($value === null) {
+            return null;
+        }
+        $storeCode = trim((string)$value);
+        return $storeCode !== '' ? $storeCode : null;
+    }
+
+    protected function resolveRequestedStoreCode(): ?string
+    {
+        $storeCode = $this->requestedStoreCode();
+        if ($storeCode === null) {
+            return null;
+        }
         return $this->storeScopeResolver->isAllowedStoreCode($storeCode) ? $storeCode : null;
+    }
+
+    protected function invalidRequestedStoreResponse(): ?Raw
+    {
+        $requested = $this->requestedStoreCode();
+        if ($requested !== null && !$this->storeScopeResolver->isAllowedStoreCode($requested)) {
+            return $this->invalidResponse(400, 'Invalid store code');
+        }
+        return null;
+    }
+
+    protected function responseFormat(bool $defaultJson = false): string
+    {
+        $format = strtolower(trim((string)$this->getRequest()->getParam('format', '')));
+        if (in_array($format, ['json'], true)) {
+            return 'json';
+        }
+        if (in_array($format, ['protobuf', 'proto', 'pb'], true)) {
+            return 'protobuf';
+        }
+        $accept = strtolower((string)$this->getRequest()->getHeader('Accept'));
+        if (str_contains($accept, 'application/x-protobuf') || str_contains($accept, 'application/protobuf')) {
+            return 'protobuf';
+        }
+        if (str_contains($accept, 'application/json')) {
+            return 'json';
+        }
+        return $defaultJson ? 'json' : 'protobuf';
+    }
+
+    /** @param array<string, mixed> $payload */
+    protected function openApiDocumentResponse(
+        array $payload,
+        string $entity,
+        string $openApiPath,
+        string $schemaRef,
+        bool $defaultJson = true,
+        int $statusCode = 200
+    ): Raw {
+        $format = $this->responseFormat($defaultJson);
+        $result = $this->rawFactory->create();
+        $result->setHttpResponseCode($statusCode);
+        $result->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0', true);
+        $result->setHeader('X-Amida-OpenAPI-Path', $openApiPath, true);
+        $result->setHeader('X-Amida-Schema-Ref', $schemaRef, true);
+        $result->setHeader('X-Amida-Entity', $entity, true);
+        if ($format === 'json') {
+            $result->setHeader('Content-Type', 'application/json', true);
+            $result->setContents((string)json_encode(
+                $payload,
+                ($this->parseTruthyRequestFlag('pretty') ? JSON_PRETTY_PRINT : 0) | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+            ));
+            return $result;
+        }
+        $encoded = $this->openApiDocumentEncoder->encode($payload, $entity, $openApiPath, $schemaRef);
+        $result->setHeader('Content-Type', 'application/x-protobuf', true);
+        $result->setHeader('X-Amida-Protobuf-Message', 'amida.productdelta.v1.OpenApiDocument', true);
+        $result->setHeader('X-Amida-Uncompressed-Length', (string)strlen($encoded), true);
+        $result->setContents($encoded);
+        return $result;
+    }
+
+    protected function parseTruthyRequestFlag(string $name, bool $default = false): bool
+    {
+        $value = $this->getRequest()->getParam($name, $default ? '1' : '0');
+        if (is_bool($value)) {
+            return $value;
+        }
+        return in_array(strtolower(trim((string)$value)), ['1', 'true', 'yes', 'on'], true);
     }
 
     protected function invalidResponse(int $statusCode, string $message): Raw

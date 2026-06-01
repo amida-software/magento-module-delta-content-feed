@@ -1,3 +1,9 @@
+# Current production API note
+
+`offer` is now the only public stream for price and availability. The older dedicated `price` and `availability` stream mapping below is historical and superseded by `docs/TZ_PRODUCTION_API_CONSISTENCY.md`. Use `offer_parts=price`, `offer_parts=availability`, or both for projection.
+
+---
+
 # Спецификация доработки: `offer`, `categories`, SKU/date-фильтры и direct SQL price/stock
 
 **Module:** `Amida_ProductDeltaFeed`

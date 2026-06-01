@@ -81,21 +81,6 @@ class ProductStateBuilder
                 'attributes' => $this->buildAttributePayload($product, $this->attributeSelector->getContentAttributeCodes()),
                 'deleted' => false,
             ],
-            'seo' => [
-                'enabled' => $enabled,
-                'attributes' => $this->buildAttributePayload($product, $this->config->getSeoAttributeCodes()),
-                'deleted' => false,
-            ],
-            'price' => [
-                'enabled' => $enabled,
-                'price' => $price,
-                'deleted' => false,
-            ],
-            'availability' => [
-                'enabled' => $enabled,
-                'availability' => $availability,
-                'deleted' => false,
-            ],
             'offer' => $offer,
             'category' => [
                 'enabled' => $enabled,

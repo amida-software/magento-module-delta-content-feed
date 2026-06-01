@@ -21,7 +21,7 @@ class SnapshotService
     }
 
     /** @param array<string, mixed> $filters */
-    public function build(string $stream, string $storeCode, int $afterStateId, array $filters = []): array
+    public function build(string $stream, ?string $storeCode, int $afterStateId, array $filters = []): array
     {
         if ($afterStateId <= 0 && $this->stateSnapshot->count() === 0) {
             $this->snapshotRebuilder->rebuild();
@@ -30,12 +30,15 @@ class SnapshotService
         $formatJson = !empty($filters['_format_json']);
         $skus = $this->normalizeSkus((array)($filters['skus'] ?? []));
         $includeOffer = (bool)($filters['include_offer'] ?? false);
+        $offerParts = $this->normalizeOfferParts((array)($filters['offer_parts'] ?? []));
         $candidateLimit = $this->config->getCandidateLimit();
         $isSkuLookup = $skus !== [];
+        $storeMultiplier = $storeCode === null ? max(1, count($this->config->getConfiguredStoreCodes())) : 1;
+        $skuLookupLimit = min($candidateLimit, max(1, count($skus) * $storeMultiplier));
 
         // SKU lookup is an explicit current-state read. It intentionally ignores after_state_id.
         $rows = $isSkuLookup
-            ? $this->stateSnapshot->fetchSnapshotRowsBySkus($stream, $storeCode, $skus, min($candidateLimit, count($skus)))
+            ? $this->stateSnapshot->fetchSnapshotRowsBySkus($stream, $storeCode, $skus, $skuLookupLimit)
             : $this->stateSnapshot->fetchSnapshotRows($stream, $storeCode, $afterStateId, $candidateLimit);
 
         $offerMap = $includeOffer ? $this->loadOfferMap($rows, $storeCode) : [];
@@ -45,17 +48,18 @@ class SnapshotService
         $hasMore = false;
         $encoded = null;
         $compressed = null;
-        $highwaterEventId = $this->changeLog->getLastEventId();
+        $requestedHighwaterEventId = max(0, (int)($filters['changes_highwater_event_id'] ?? 0));
+        $highwaterEventId = $requestedHighwaterEventId > 0 ? $requestedHighwaterEventId : $this->changeLog->getLastEventId();
         $maxBytes = $this->config->getMaxBatchSizeBytes();
 
         foreach ($rows as $row) {
-            $item = $this->rowToItem($row, $stream, $storeCode, $includeOffer, $offerMap, $diagnostics);
+            $item = $this->rowToItem($row, $stream, $storeCode, $includeOffer, $offerMap, $diagnostics, $offerParts);
 
             $trialItems = array_merge($accepted, [$item]);
             $trialMeta = [
                 'schema_version' => 1,
                 'stream' => $stream,
-                'store_code' => $storeCode,
+                'store_code' => $storeCode ?? '*',
                 'from_state_id' => $isSkuLookup ? 0 : $afterStateId,
                 'to_state_id' => $isSkuLookup ? 0 : (int)$row['state_id'],
                 'has_more' => false,
@@ -82,7 +86,7 @@ class SnapshotService
             $meta = [
                 'schema_version' => 1,
                 'stream' => $stream,
-                'store_code' => $storeCode,
+                'store_code' => $storeCode ?? '*',
                 'from_state_id' => $isSkuLookup ? 0 : $afterStateId,
                 'to_state_id' => $toStateId,
                 'has_more' => false,
@@ -98,6 +102,20 @@ class SnapshotService
             $hasMore = true;
         }
 
+        $finalMeta = [
+            'schema_version' => 1,
+            'stream' => $stream,
+            'store_code' => $storeCode ?? '*',
+            'from_state_id' => $isSkuLookup ? 0 : $afterStateId,
+            'to_state_id' => $toStateId,
+            'has_more' => $isSkuLookup ? false : $hasMore,
+            'changes_highwater_event_id' => $highwaterEventId,
+        ];
+        $encoded = $formatJson
+            ? $this->encodeJsonEnvelope($finalMeta, $accepted, $diagnostics)
+            : $this->encoder->encodeSnapshotEnvelope($finalMeta, $accepted, $diagnostics);
+        $compressed = $formatJson ? $encoded : $this->compressor->compress($encoded);
+
         return [
             'body' => $compressed,
             'headers' => [
@@ -105,7 +123,8 @@ class SnapshotService
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
                 'X-Amida-Schema-Version' => '1',
                 'X-Amida-Stream' => $stream,
-                'X-Amida-Store' => $storeCode,
+                'X-Amida-Store' => $storeCode ?? '*',
+                'X-Amida-Store-Scope' => $storeCode === null ? 'all' : 'single',
                 'X-Amida-From-State-Id' => (string)($isSkuLookup ? 0 : $afterStateId),
                 'X-Amida-To-State-Id' => (string)$toStateId,
                 'X-Amida-Has-More' => $hasMore ? '1' : '0',
@@ -129,15 +148,21 @@ class SnapshotService
      * @param array<string, array<string, mixed>> $offerMap
      * @param array<int, array<string, mixed>> $diagnostics
      */
-    private function rowToItem(array $row, string $stream, string $storeCode, bool $includeOffer = false, array $offerMap = [], array &$diagnostics = []): array
+    private function rowToItem(array $row, string $stream, ?string $storeCode, bool $includeOffer = false, array $offerMap = [], array &$diagnostics = [], array $offerParts = []): array
     {
         $payload = json_decode((string)$row['state_json'], true) ?: [];
         $stateHash = (string)($row['state_hash'] ?? '');
+        if ($stream === Config::STREAM_OFFER && isset($payload['offer']) && is_array($payload['offer'])) {
+            $payload['offer'] = $this->filterOfferPayload((array)$payload['offer'], $offerParts);
+            if ($offerParts !== []) {
+                $stateHash = $this->hashPayload($payload);
+            }
+        }
         if ($includeOffer && $stream !== Config::STREAM_OFFER) {
             $sku = (string)$row['sku'];
-            $offerState = $offerMap[$sku]['state'] ?? null;
+            $offerState = $offerMap[$sku . '@' . (string)($row['store_code'] ?? '')]['state'] ?? ($offerMap[$sku]['state'] ?? null);
             if (is_array($offerState) && isset($offerState['offer'])) {
-                $payload['offer'] = $offerState['offer'];
+                $payload['offer'] = $this->filterOfferPayload((array)$offerState['offer'], $offerParts);
                 $stateHash = $this->hashPayload($payload);
             } else {
                 $diagnostics[] = [
@@ -153,7 +178,7 @@ class SnapshotService
             'product_id' => (int)$row['entity_id'],
             'sku' => (string)$row['sku'],
             'stream' => $stream,
-            'store_code' => $storeCode,
+            'store_code' => $storeCode ?? (string)($row['store_code'] ?? '*'),
             'updated_at' => (string)($row['updated_at'] ?? ''),
             'state_hash' => $stateHash,
             'payload' => $payload,
@@ -164,7 +189,7 @@ class SnapshotService
      * @param array<int, array<string, mixed>> $rows
      * @return array<string, array<string, mixed>>
      */
-    private function loadOfferMap(array $rows, string $storeCode): array
+    private function loadOfferMap(array $rows, ?string $storeCode): array
     {
         $skus = [];
         foreach ($rows as $row) {
@@ -205,6 +230,35 @@ class SnapshotService
     private function normalizeSkus(array $skus): array
     {
         return array_values(array_filter(array_unique(array_map(static fn (mixed $sku): string => trim((string)$sku), $skus)), static fn (string $sku): bool => $sku !== ''));
+    }
+
+
+    /** @param string[] $parts */
+    private function normalizeOfferParts(array $parts): array
+    {
+        $allowed = ['price', 'availability'];
+        $parts = array_values(array_intersect($allowed, array_values(array_unique(array_map(static fn (mixed $p): string => strtolower(trim((string)$p)), $parts)))));
+        return $parts;
+    }
+
+    /** @param array<string, mixed> $offer */
+    private function filterOfferPayload(array $offer, array $parts): array
+    {
+        if ($parts === []) {
+            return $offer;
+        }
+        $identity = array_intersect_key($offer, array_flip(['product_id', 'sku', 'parent_product_id', 'parent_sku', 'magento_type_id', 'source_updated_at', 'source']));
+        if (in_array('price', $parts, true)) {
+            $identity['prices'] = $offer['prices'] ?? [];
+        }
+        if (in_array('availability', $parts, true)) {
+            foreach (['qty', 'is_salable', 'manage_stock', 'backorders'] as $field) {
+                if (array_key_exists($field, $offer)) {
+                    $identity[$field] = $offer[$field];
+                }
+            }
+        }
+        return $identity;
     }
 
     /** @param mixed $payload */

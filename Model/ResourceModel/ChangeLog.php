@@ -30,7 +30,7 @@ class ChangeLog
      */
     public function fetchChanges(
         string $stream,
-        string $storeCode,
+        ?string $storeCode,
         int $afterEventId,
         int $limit,
         ?string $changedFrom = null,
@@ -41,11 +41,13 @@ class ChangeLog
         $select = $connection->select()
             ->from($this->getTable())
             ->where('stream_code = ?', $stream)
-            ->where('store_code = ?', $storeCode)
             ->where('event_id > ?', $afterEventId)
             ->order('event_id ASC')
             ->limit($limit);
 
+        if ($storeCode !== null) {
+            $select->where('store_code = ?', $storeCode);
+        }
         if ($changedFrom !== null && $changedFrom !== '') {
             $select->where('created_at >= ?', $changedFrom);
         }

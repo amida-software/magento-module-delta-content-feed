@@ -21,7 +21,7 @@ class ChangesService
     }
 
     /** @param array<string, mixed> $filters */
-    public function build(string $stream, string $storeCode, int $afterEventId, array $filters = []): array
+    public function build(string $stream, ?string $storeCode, int $afterEventId, array $filters = []): array
     {
         $formatJson = !empty($filters['_format_json']);
         $oldest = $this->changeLog->getOldestRetainedEventId();
@@ -35,7 +35,7 @@ class ChangesService
             $meta = [
                 'schema_version' => 1,
                 'stream' => $stream,
-                'store_code' => $storeCode,
+                'store_code' => $storeCode ?? '*',
                 'from_event_id' => $afterEventId,
                 'to_event_id' => $afterEventId,
                 'has_more' => false,
@@ -49,6 +49,7 @@ class ChangesService
         }
 
         $includeOffer = (bool)($filters['include_offer'] ?? false);
+        $offerParts = $this->normalizeOfferParts((array)($filters['offer_parts'] ?? []));
         $candidateRows = $this->changeLog->fetchChanges(
             $stream,
             $storeCode,
@@ -69,12 +70,12 @@ class ChangesService
         $hardSingleLimit = $this->config->getHardSingleItemLimitBytes();
 
         foreach ($candidateRows as $row) {
-            $decodedItem = $this->rowToItem($row, $includeOffer, $offerMap);
+            $decodedItem = $this->rowToItem($row, $includeOffer, $offerMap, $offerParts);
             $trialItems = array_merge($accepted, [$decodedItem]);
             $trialMeta = [
                 'schema_version' => 1,
                 'stream' => $stream,
-                'store_code' => $storeCode,
+                'store_code' => $storeCode ?? '*',
                 'from_event_id' => $afterEventId,
                 'to_event_id' => (int)$row['event_id'],
                 'has_more' => false,
@@ -127,7 +128,7 @@ class ChangesService
             $meta = [
                 'schema_version' => 1,
                 'stream' => $stream,
-                'store_code' => $storeCode,
+                'store_code' => $storeCode ?? '*',
                 'from_event_id' => $afterEventId,
                 'to_event_id' => $toEventId,
                 'has_more' => false,
@@ -143,12 +144,26 @@ class ChangesService
             $hasMore = true;
         }
 
+        $finalMeta = [
+            'schema_version' => 1,
+            'stream' => $stream,
+            'store_code' => $storeCode ?? '*',
+            'from_event_id' => $afterEventId,
+            'to_event_id' => $toEventId,
+            'has_more' => $hasMore,
+            'cursor_expired' => false,
+        ];
+        $encoded = $formatJson
+            ? $this->encodeJsonEnvelope($finalMeta, $accepted, $diagnostics)
+            : $this->encoder->encodeChangesEnvelope($finalMeta, $accepted, $diagnostics);
+        $compressed = $formatJson ? $encoded : $this->compressor->compress($encoded);
+
         return $this->response($stream, $storeCode, $afterEventId, $toEventId, $hasMore, $encoded, $compressed, false, $formatJson);
     }
 
     private function response(
         string $stream,
-        string $storeCode,
+        ?string $storeCode,
         int $fromEventId,
         int $toEventId,
         bool $hasMore,
@@ -164,7 +179,8 @@ class ChangesService
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
                 'X-Amida-Schema-Version' => '1',
                 'X-Amida-Stream' => $stream,
-                'X-Amida-Store' => $storeCode,
+                'X-Amida-Store' => $storeCode ?? '*',
+                'X-Amida-Store-Scope' => $storeCode === null ? 'all' : 'single',
                 'X-Amida-From-Event-Id' => (string)$fromEventId,
                 'X-Amida-To-Event-Id' => (string)$toEventId,
                 'X-Amida-Has-More' => $hasMore ? '1' : '0',
@@ -186,14 +202,20 @@ class ChangesService
     /**
      * @param array<string, array<string, mixed>> $offerMap
      */
-    private function rowToItem(array $row, bool $includeOffer = false, array $offerMap = []): array
+    private function rowToItem(array $row, bool $includeOffer = false, array $offerMap = [], array $offerParts = []): array
     {
         $payload = json_decode((string)$row['payload_json'], true) ?: [];
         $payloadHash = (string)($row['payload_hash'] ?? '');
+        if ((string)$row['stream_code'] === Config::STREAM_OFFER && isset($payload['offer']) && is_array($payload['offer'])) {
+            $payload['offer'] = $this->filterOfferPayload((array)$payload['offer'], $offerParts);
+            if ($offerParts !== []) {
+                $payloadHash = $this->hashPayload($payload);
+            }
+        }
         if ($includeOffer && (string)$row['stream_code'] !== Config::STREAM_OFFER) {
-            $offerState = $offerMap[(string)$row['sku']]['state'] ?? null;
+            $offerState = $offerMap[(string)$row['sku'] . '@' . (string)($row['store_code'] ?? '')]['state'] ?? ($offerMap[(string)$row['sku']]['state'] ?? null);
             if (is_array($offerState) && isset($offerState['offer'])) {
-                $payload['offer'] = $offerState['offer'];
+                $payload['offer'] = $this->filterOfferPayload((array)$offerState['offer'], $offerParts);
                 $payloadHash = $this->hashPayload($payload);
             }
         }
@@ -219,7 +241,7 @@ class ChangesService
      * @param array<int, array<string, mixed>> $rows
      * @return array<string, array<string, mixed>>
      */
-    private function loadOfferMap(array $rows, string $storeCode): array
+    private function loadOfferMap(array $rows, ?string $storeCode): array
     {
         $skus = [];
         foreach ($rows as $row) {
@@ -228,7 +250,35 @@ class ChangesService
                 $skus[] = $sku;
             }
         }
-        return $this->stateSnapshot->fetchStateMapBySkus('offer', $storeCode, $skus);
+        return $this->stateSnapshot->fetchStateMapBySkus(Config::STREAM_OFFER, $storeCode, $skus);
+    }
+
+
+    /** @param string[] $parts */
+    private function normalizeOfferParts(array $parts): array
+    {
+        $allowed = ['price', 'availability'];
+        return array_values(array_intersect($allowed, array_values(array_unique(array_map(static fn (mixed $p): string => strtolower(trim((string)$p)), $parts)))));
+    }
+
+    /** @param array<string, mixed> $offer */
+    private function filterOfferPayload(array $offer, array $parts): array
+    {
+        if ($parts === []) {
+            return $offer;
+        }
+        $identity = array_intersect_key($offer, array_flip(['product_id', 'sku', 'parent_product_id', 'parent_sku', 'magento_type_id', 'source_updated_at', 'source']));
+        if (in_array('price', $parts, true)) {
+            $identity['prices'] = $offer['prices'] ?? [];
+        }
+        if (in_array('availability', $parts, true)) {
+            foreach (['qty', 'is_salable', 'manage_stock', 'backorders'] as $field) {
+                if (array_key_exists($field, $offer)) {
+                    $identity[$field] = $offer[$field];
+                }
+            }
+        }
+        return $identity;
     }
 
     /** @param mixed $payload */

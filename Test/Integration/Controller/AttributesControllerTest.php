@@ -157,4 +157,17 @@ class AttributesControllerTest extends AbstractFeedControllerTest
             }
         }
     }
+
+    public function testAttributesEndpointSupportsProtobufWrapperAndOptionalStore(): void
+    {
+        $this->configWriter->save('amida_productdeltafeed/streams/attributes_enabled', 1);
+        $this->cacheTypeList->cleanType('config');
+
+        $this->dispatch('amidafeed/v1/attributes/key/integration-key?codes=name&all=1&format=protobuf');
+        self::assertSame(200, $this->getResponse()->getHttpResponseCode());
+        self::assertStringContainsString('application/x-protobuf', (string)$this->getResponse()->getHeader('Content-Type')->getFieldValue());
+        self::assertStringContainsString('OpenApiDocument', (string)$this->getResponse()->getHeader('X-Amida-Protobuf-Message')->getFieldValue());
+        self::assertNotSame('', $this->getResponse()->getBody());
+    }
+
 }

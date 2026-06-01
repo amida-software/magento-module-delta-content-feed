@@ -52,15 +52,17 @@ class CategoryStateSnapshot
      * @param int[] $categoryIds
      * @return array<int, array<string, mixed>>
      */
-    public function fetchSnapshotRows(string $storeCode, int $afterStateId, int $limit, array $categoryIds = []): array
+    public function fetchSnapshotRows(?string $storeCode, int $afterStateId, int $limit, array $categoryIds = []): array
     {
         $connection = $this->resourceConnection->getConnection();
         $select = $connection->select()
             ->from($this->getTable())
-            ->where('store_code = ?', $storeCode)
             ->where('state_id > ?', $afterStateId)
             ->order('state_id ASC')
             ->limit($limit);
+        if ($storeCode !== null) {
+            $select->where('store_code = ?', $storeCode);
+        }
         $categoryIds = array_values(array_filter(array_unique(array_map('intval', $categoryIds)), static fn (int $id): bool => $id > 0));
         if ($categoryIds !== []) {
             $select->where('category_id IN (?)', $categoryIds);

@@ -6,6 +6,7 @@ namespace Amida\ProductDeltaFeed\Controller\V1;
 use Amida\ProductDeltaFeed\Model\Config;
 use Amida\ProductDeltaFeed\Model\Feed\ApiRequestGate;
 use Amida\ProductDeltaFeed\Model\Feed\ZstdCompressor;
+use Amida\ProductDeltaFeed\Model\Feed\OpenApiDocumentEncoder;
 use Amida\ProductDeltaFeed\Model\Store\AttributeDictionaryService;
 use Amida\ProductDeltaFeed\Model\StoreScopeResolver;
 use Magento\Framework\App\Action\Context;
@@ -23,9 +24,10 @@ class Attributes extends AbstractFeedAction
         StoreScopeResolver $storeScopeResolver,
         ZstdCompressor $compressor,
         ApiRequestGate $requestGate,
+        OpenApiDocumentEncoder $openApiDocumentEncoder,
         private readonly AttributeDictionaryService $attributeDictionaryService
     ) {
-        parent::__construct($context, $rawFactory, $jsonFactory, $config, $storeScopeResolver, $compressor, $requestGate);
+        parent::__construct($context, $rawFactory, $jsonFactory, $config, $storeScopeResolver, $compressor, $requestGate, $openApiDocumentEncoder);
     }
 
     public function execute(): ResultInterface
@@ -38,16 +40,29 @@ class Attributes extends AbstractFeedAction
             return $this->invalidResponse(404, 'Attributes stream is disabled');
         }
 
-        $storeCode = $this->resolveStoreCode();
-        if ($storeCode === null) {
-            return $this->invalidResponse(400, 'Invalid store code');
+        $invalidStore = $this->invalidRequestedStoreResponse();
+        if ($invalidStore !== null) {
+            return $invalidStore;
         }
 
-        $payload = $this->attributeDictionaryService->build($storeCode, $this->parseCodes(), $this->parseLoadOptions(), $this->parseSchemaVersion(), $this->parseAll());
+        $storeCode = $this->resolveRequestedStoreCode();
+        $effectiveStoreCode = $storeCode ?? $this->storeScopeResolver->getDefaultStoreCode();
+        $payload = $this->attributeDictionaryService->build($effectiveStoreCode, $this->parseCodes(), $this->parseLoadOptions(), $this->parseSchemaVersion(), $this->parseAll());
+        if ($storeCode === null) {
+            $payload['store_scope'] = 'all';
+            $payload['requested_store_code'] = null;
+        } else {
+            $payload['store_scope'] = 'single';
+            $payload['requested_store_code'] = $storeCode;
+        }
 
-        return $this->parsePretty()
-            ? $this->prettyJsonResponse($payload)
-            : $this->jsonResponse($payload);
+        return $this->openApiDocumentResponse(
+            $payload,
+            'attributes',
+            '/amidafeed/v1/attributes/key/{key}',
+            $this->parseSchemaVersion() === 1 ? '#/components/schemas/AttributesDictionaryV1' : '#/components/schemas/AttributesDictionaryV2',
+            true
+        );
     }
 
     private function parsePretty(): bool

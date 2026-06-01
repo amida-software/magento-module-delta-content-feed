@@ -16,7 +16,7 @@ use Amida\ProductDeltaFeed\Model\StoreScopeResolver;
 
 class ChangeProcessor
 {
-    private const PRODUCT_STREAMS = ['content', 'seo', 'price', 'availability', 'offer', 'category', 'curated'];
+    private const PRODUCT_STREAMS = ['content', 'offer', 'category', 'curated'];
 
     public function __construct(
         private readonly Config $config,
@@ -246,10 +246,7 @@ class ChangeProcessor
     private function shouldEvaluateStream(string $stream, int $reasonFlags): bool
     {
         return match ($stream) {
-            'content' => (bool)($reasonFlags & (ReasonFlags::CONTENT | ReasonFlags::FORCE_COMPARE | ReasonFlags::FORCE_FULL | ReasonFlags::STATUS)),
-            'seo' => (bool)($reasonFlags & (ReasonFlags::SEO | ReasonFlags::FORCE_COMPARE | ReasonFlags::FORCE_FULL | ReasonFlags::STATUS)),
-            'price' => (bool)($reasonFlags & (ReasonFlags::PRICE | ReasonFlags::FORCE_COMPARE | ReasonFlags::FORCE_FULL | ReasonFlags::STATUS)),
-            'availability' => (bool)($reasonFlags & (ReasonFlags::AVAILABILITY | ReasonFlags::FORCE_COMPARE | ReasonFlags::FORCE_FULL | ReasonFlags::STATUS)),
+            'content' => (bool)($reasonFlags & (ReasonFlags::CONTENT | ReasonFlags::SEO | ReasonFlags::FORCE_COMPARE | ReasonFlags::FORCE_FULL | ReasonFlags::STATUS)),
             'offer' => (bool)($reasonFlags & (ReasonFlags::PRICE | ReasonFlags::AVAILABILITY | ReasonFlags::FORCE_COMPARE | ReasonFlags::FORCE_FULL | ReasonFlags::STATUS)),
             'category' => (bool)($reasonFlags & (ReasonFlags::CATEGORY | ReasonFlags::FORCE_COMPARE | ReasonFlags::FORCE_FULL | ReasonFlags::STATUS)),
             'curated' => (bool)($reasonFlags & (ReasonFlags::CONTENT | ReasonFlags::SEO | ReasonFlags::PRICE | ReasonFlags::AVAILABILITY | ReasonFlags::CATEGORY | ReasonFlags::STATUS | ReasonFlags::FORCE_COMPARE | ReasonFlags::FORCE_FULL)),

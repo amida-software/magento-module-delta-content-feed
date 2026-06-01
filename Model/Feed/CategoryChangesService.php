@@ -17,7 +17,7 @@ class CategoryChangesService
     }
 
     /** @param array<string, mixed> $filters */
-    public function build(string $storeCode, int $afterEventId, array $filters = []): array
+    public function build(?string $storeCode, int $afterEventId, array $filters = []): array
     {
         $formatJson = !empty($filters['_format_json']);
         $oldest = $this->changeLog->getOldestRetainedEventId();
@@ -30,7 +30,7 @@ class CategoryChangesService
             $meta = [
                 'schema_version' => 1,
                 'stream' => Config::STREAM_CATEGORIES,
-                'store_code' => $storeCode,
+                'store_code' => $storeCode ?? '*',
                 'from_event_id' => $afterEventId,
                 'to_event_id' => $afterEventId,
                 'has_more' => false,
@@ -65,7 +65,7 @@ class CategoryChangesService
             $trialMeta = [
                 'schema_version' => 1,
                 'stream' => Config::STREAM_CATEGORIES,
-                'store_code' => $storeCode,
+                'store_code' => $storeCode ?? '*',
                 'from_event_id' => $afterEventId,
                 'to_event_id' => (int)$row['event_id'],
                 'has_more' => false,
@@ -89,7 +89,7 @@ class CategoryChangesService
             $meta = [
                 'schema_version' => 1,
                 'stream' => Config::STREAM_CATEGORIES,
-                'store_code' => $storeCode,
+                'store_code' => $storeCode ?? '*',
                 'from_event_id' => $afterEventId,
                 'to_event_id' => $toEventId,
                 'has_more' => false,
@@ -105,10 +105,24 @@ class CategoryChangesService
             $hasMore = true;
         }
 
+        $finalMeta = [
+            'schema_version' => 1,
+            'stream' => Config::STREAM_CATEGORIES,
+            'store_code' => $storeCode ?? '*',
+            'from_event_id' => $afterEventId,
+            'to_event_id' => $toEventId,
+            'has_more' => $hasMore,
+            'cursor_expired' => false,
+        ];
+        $encoded = $formatJson
+            ? $this->encodeJsonEnvelope($finalMeta, $accepted, $diagnostics)
+            : $this->encoder->encodeCategoryChangesEnvelope($finalMeta, $accepted, $diagnostics);
+        $compressed = $formatJson ? $encoded : $this->compressor->compress($encoded);
+
         return $this->response($storeCode, $afterEventId, $toEventId, $hasMore, $encoded, $compressed, false, $formatJson);
     }
 
-    private function response(string $storeCode, int $fromEventId, int $toEventId, bool $hasMore, string $encoded, string $body, bool $cursorExpired, bool $formatJson = false): array
+    private function response(?string $storeCode, int $fromEventId, int $toEventId, bool $hasMore, string $encoded, string $body, bool $cursorExpired, bool $formatJson = false): array
     {
         return [
             'body' => $body,
@@ -117,7 +131,8 @@ class CategoryChangesService
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
                 'X-Amida-Schema-Version' => '1',
                 'X-Amida-Stream' => Config::STREAM_CATEGORIES,
-                'X-Amida-Store' => $storeCode,
+                'X-Amida-Store' => $storeCode ?? '*',
+                'X-Amida-Store-Scope' => $storeCode === null ? 'all' : 'single',
                 'X-Amida-From-Event-Id' => (string)$fromEventId,
                 'X-Amida-To-Event-Id' => (string)$toEventId,
                 'X-Amida-Has-More' => $hasMore ? '1' : '0',
@@ -136,13 +151,13 @@ class CategoryChangesService
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
-    private function rowToItem(array $row, string $storeCode): array
+    private function rowToItem(array $row, ?string $storeCode): array
     {
         return [
             'event_id' => (int)$row['event_id'],
             'stream' => Config::STREAM_CATEGORIES,
             'category_id' => (int)$row['category_id'],
-            'store_code' => $storeCode,
+            'store_code' => $storeCode ?? (string)($row['store_code'] ?? '*'),
             'event_type' => (string)$row['event_type'],
             'changed_fields' => json_decode((string)$row['changed_fields_json'], true) ?: [],
             'source_updated_at' => (string)($row['source_updated_at'] ?? ''),

@@ -96,7 +96,7 @@ class ChangesServiceTest extends TestCase
             ->willReturn([
                 'SKU-1' => ['state' => ['offer' => ['sku' => 'SKU-1', 'qty' => 4.0]]],
             ]);
-        $this->encoder->expects(self::once())
+        $this->encoder->expects(self::atLeastOnce())
             ->method('encodeChangesEnvelope')
             ->willReturnCallback(static function (array $meta, array $items, array $diagnostics): string {
                 TestCase::assertSame('content', $meta['stream']);

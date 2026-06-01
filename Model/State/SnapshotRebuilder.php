@@ -10,7 +10,7 @@ use Amida\ProductDeltaFeed\Model\ResourceModel\StateSnapshot;
 
 class SnapshotRebuilder
 {
-    private const PRODUCT_STREAMS = ['content', 'seo', 'price', 'availability', 'offer', 'category', 'curated'];
+    private const PRODUCT_STREAMS = ['content', 'offer', 'category', 'curated'];
 
     public function __construct(
         private readonly Config $config,

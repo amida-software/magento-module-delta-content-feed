@@ -290,3 +290,18 @@ enum ValueKind {
   MULTISELECT = 8;
   TEXT = 9;
 }
+
+
+// Generic protobuf representation of any endpoint documented in docs/openapi.yaml.
+// The canonical JSON payload is the source of truth; this wrapper provides a binary
+// transport for endpoints whose schemas are primarily OpenAPI/JSON.
+message OpenApiDocument {
+  uint32 schema_version = 1;
+  string entity = 2;
+  string openapi_path = 3;
+  string schema_ref = 4;
+  string content_type = 5;
+  bytes json_payload = 6;
+  string payload_hash = 7;
+  string generated_at = 8;
+}

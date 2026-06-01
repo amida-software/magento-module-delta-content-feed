@@ -66,9 +66,6 @@ class Config
 
     private const STREAM_PATHS = [
         self::STREAM_CONTENT => 'amida_productdeltafeed/streams/content_enabled',
-        self::STREAM_SEO => 'amida_productdeltafeed/streams/seo_enabled',
-        self::STREAM_PRICE => 'amida_productdeltafeed/streams/price_enabled',
-        self::STREAM_AVAILABILITY => 'amida_productdeltafeed/streams/availability_enabled',
         self::STREAM_CATEGORY => 'amida_productdeltafeed/streams/category_enabled',
         self::STREAM_CATEGORIES => 'amida_productdeltafeed/streams/categories_enabled',
         self::STREAM_CURATED => 'amida_productdeltafeed/streams/curated_enabled',

@@ -22,6 +22,9 @@ class AttributeSelector
         'description',
         'short_description',
         'url_key',
+        'meta_title',
+        'meta_description',
+        'meta_keyword',
     ];
 
     private ?array $contentAttributes = null;
@@ -50,7 +53,6 @@ class AttributeSelector
         // No explicit include list (e.g. a fresh store): default to filterable attributes.
         $exclude = array_flip(array_merge(
             $this->config->getContentExcludeAttributes(),
-            $this->config->getSeoAttributeCodes(),
             $this->config->getPriceAttributeCodes(),
             ['status', 'quantity_and_stock_status', 'category_ids']
         ));

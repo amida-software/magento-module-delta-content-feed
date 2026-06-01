@@ -12,6 +12,7 @@ use Amida\ProductDeltaFeed\Model\Feed\ApiRequestGate;
 use Amida\ProductDeltaFeed\Model\Feed\CategoryChangesService;
 use Amida\ProductDeltaFeed\Model\Feed\ChangesService;
 use Amida\ProductDeltaFeed\Model\Feed\ZstdCompressor;
+use Amida\ProductDeltaFeed\Model\Feed\OpenApiDocumentEncoder;
 use Amida\ProductDeltaFeed\Model\StoreScopeResolver;
 
 class Changes extends AbstractFeedAction
@@ -24,10 +25,11 @@ class Changes extends AbstractFeedAction
         StoreScopeResolver $storeScopeResolver,
         ZstdCompressor $compressor,
         ApiRequestGate $requestGate,
+        OpenApiDocumentEncoder $openApiDocumentEncoder,
         private readonly ChangesService $changesService,
         private readonly CategoryChangesService $categoryChangesService
     ) {
-        parent::__construct($context, $rawFactory, $jsonFactory, $config, $storeScopeResolver, $compressor, $requestGate);
+        parent::__construct($context, $rawFactory, $jsonFactory, $config, $storeScopeResolver, $compressor, $requestGate, $openApiDocumentEncoder);
     }
 
     public function execute(): ResultInterface
@@ -42,10 +44,11 @@ class Changes extends AbstractFeedAction
             return $this->invalidResponse(404, 'Unknown or disabled stream');
         }
 
-        $storeCode = $this->resolveStoreCode();
-        if ($storeCode === null) {
-            return $this->invalidResponse(400, 'Invalid store code');
+        $invalidStore = $this->invalidRequestedStoreResponse();
+        if ($invalidStore !== null) {
+            return $invalidStore;
         }
+        $storeCode = $this->resolveRequestedStoreCode();
 
         $afterEventId = max(0, (int)$this->getRequest()->getParam('after_event_id', 0));
         $filters = $this->buildQueryFilters();
@@ -78,6 +81,7 @@ class Changes extends AbstractFeedAction
             'changed_from' => trim((string)($body['changed_from'] ?? $this->getRequest()->getParam('changed_from', ''))),
             'changed_to' => trim((string)($body['changed_to'] ?? $this->getRequest()->getParam('changed_to', ''))),
             'include_offer' => (bool)(int)($body['include_offer'] ?? $this->getRequest()->getParam('include_offer', 0)),
+            'offer_parts' => $this->parseOfferParts($body),
             '_format_json' => $this->parseFormatJson($body),
         ];
     }
@@ -96,10 +100,23 @@ class Changes extends AbstractFeedAction
     }
 
     /** @param array<string, mixed> $body */
+    private function parseOfferParts(array $body): array
+    {
+        $value = $body['offer_parts'] ?? $body['offer_part'] ?? $this->getRequest()->getParam('offer_parts', $this->getRequest()->getParam('offer_part', ''));
+        $parts = is_array($value) ? $value : explode(',', (string)$value);
+        $allowed = ['price', 'availability'];
+        $parts = array_values(array_intersect($allowed, array_values(array_unique(array_filter(array_map(static fn (mixed $p): string => strtolower(trim((string)$p)), $parts))))));
+        return $parts;
+    }
+
+    /** @param array<string, mixed> $body */
     private function parseFormatJson(array $body): bool
     {
         $value = array_key_exists('format', $body) ? $body['format'] : $this->getRequest()->getParam('format', '');
-        return strtolower(trim((string)$value)) === 'json';
+        if (strtolower(trim((string)$value)) === 'json') {
+            return true;
+        }
+        return $this->responseFormat(false) === 'json';
     }
 
     /** @return array<string, mixed> */

@@ -102,21 +102,6 @@
                     <label>Enable content stream</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                 </field>
-                <field id="seo_enabled" translate="label" type="select" sortOrder="20"
-                       showInDefault="1" showInWebsite="1" showInStore="0">
-                    <label>Enable SEO stream</label>
-                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-                </field>
-                <field id="price_enabled" translate="label" type="select" sortOrder="30"
-                       showInDefault="1" showInWebsite="1" showInStore="0">
-                    <label>Enable price stream</label>
-                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-                </field>
-                <field id="availability_enabled" translate="label" type="select" sortOrder="40"
-                       showInDefault="1" showInWebsite="1" showInStore="0">
-                    <label>Enable availability stream</label>
-                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-                </field>
                 <field id="category_enabled" translate="label" type="select" sortOrder="50"
                        showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Enable category stream</label>

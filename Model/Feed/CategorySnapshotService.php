@@ -21,7 +21,7 @@ class CategorySnapshotService
     }
 
     /** @param array<string, mixed> $filters */
-    public function build(string $storeCode, int $afterStateId, array $filters = []): array
+    public function build(?string $storeCode, int $afterStateId, array $filters = []): array
     {
         $formatJson = !empty($filters['_format_json']);
         if ($afterStateId <= 0 && $this->stateSnapshot->count() === 0) {
@@ -31,10 +31,12 @@ class CategorySnapshotService
         $categoryIds = $this->normalizeIds((array)($filters['category_ids'] ?? []));
         $isCategoryLookup = $categoryIds !== [];
         $candidateLimit = $this->config->getCandidateLimit();
+        $storeMultiplier = $storeCode === null ? max(1, count($this->config->getConfiguredStoreCodes())) : 1;
+        $effectiveLimit = $isCategoryLookup ? min($candidateLimit, max(1, count($categoryIds) * $storeMultiplier)) : $candidateLimit;
         $rows = $this->stateSnapshot->fetchSnapshotRows(
             $storeCode,
             $isCategoryLookup ? 0 : $afterStateId,
-            $candidateLimit,
+            $effectiveLimit,
             $categoryIds
         );
 
@@ -44,7 +46,8 @@ class CategorySnapshotService
         $hasMore = false;
         $encoded = null;
         $compressed = null;
-        $highwaterEventId = $this->changeLog->getLastEventId();
+        $requestedHighwaterEventId = max(0, (int)($filters['changes_highwater_event_id'] ?? 0));
+        $highwaterEventId = $requestedHighwaterEventId > 0 ? $requestedHighwaterEventId : $this->changeLog->getLastEventId();
         $maxBytes = $this->config->getMaxBatchSizeBytes();
 
         foreach ($rows as $row) {
@@ -53,7 +56,7 @@ class CategorySnapshotService
             $trialMeta = [
                 'schema_version' => 1,
                 'stream' => Config::STREAM_CATEGORIES,
-                'store_code' => $storeCode,
+                'store_code' => $storeCode ?? '*',
                 'from_state_id' => $isCategoryLookup ? 0 : $afterStateId,
                 'to_state_id' => $isCategoryLookup ? 0 : (int)$row['state_id'],
                 'has_more' => false,
@@ -79,7 +82,7 @@ class CategorySnapshotService
             $meta = [
                 'schema_version' => 1,
                 'stream' => Config::STREAM_CATEGORIES,
-                'store_code' => $storeCode,
+                'store_code' => $storeCode ?? '*',
                 'from_state_id' => $isCategoryLookup ? 0 : $afterStateId,
                 'to_state_id' => $toStateId,
                 'has_more' => false,
@@ -95,6 +98,20 @@ class CategorySnapshotService
             $hasMore = true;
         }
 
+        $finalMeta = [
+            'schema_version' => 1,
+            'stream' => Config::STREAM_CATEGORIES,
+            'store_code' => $storeCode ?? '*',
+            'from_state_id' => $isCategoryLookup ? 0 : $afterStateId,
+            'to_state_id' => $toStateId,
+            'has_more' => $isCategoryLookup ? false : $hasMore,
+            'changes_highwater_event_id' => $highwaterEventId,
+        ];
+        $encoded = $formatJson
+            ? $this->encodeJsonEnvelope($finalMeta, $accepted, $diagnostics)
+            : $this->encoder->encodeCategorySnapshotEnvelope($finalMeta, $accepted, $diagnostics);
+        $compressed = $formatJson ? $encoded : $this->compressor->compress($encoded);
+
         return $this->response(
             $storeCode,
             $isCategoryLookup ? 0 : $afterStateId,
@@ -109,7 +126,7 @@ class CategorySnapshotService
     }
 
     private function response(
-        string $storeCode,
+        ?string $storeCode,
         int $fromStateId,
         int $toStateId,
         bool $hasMore,
@@ -126,7 +143,8 @@ class CategorySnapshotService
                 'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
                 'X-Amida-Schema-Version' => '1',
                 'X-Amida-Stream' => Config::STREAM_CATEGORIES,
-                'X-Amida-Store' => $storeCode,
+                'X-Amida-Store' => $storeCode ?? '*',
+                'X-Amida-Store-Scope' => $storeCode === null ? 'all' : 'single',
                 'X-Amida-From-State-Id' => (string)$fromStateId,
                 'X-Amida-To-State-Id' => (string)$toStateId,
                 'X-Amida-Has-More' => ($isCategoryLookup ? false : $hasMore) ? '1' : '0',
@@ -146,13 +164,13 @@ class CategorySnapshotService
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
-    private function rowToItem(array $row, string $storeCode): array
+    private function rowToItem(array $row, ?string $storeCode): array
     {
         return [
             'state_id' => (int)$row['state_id'],
             'category_id' => (int)$row['category_id'],
             'stream' => Config::STREAM_CATEGORIES,
-            'store_code' => $storeCode,
+            'store_code' => $storeCode ?? (string)($row['store_code'] ?? '*'),
             'updated_at' => (string)($row['updated_at'] ?? ''),
             'state_hash' => (string)($row['state_hash'] ?? ''),
             'payload' => json_decode((string)$row['state_json'], true) ?: [],

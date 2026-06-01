@@ -67,16 +67,18 @@ class StateSnapshot
      * @param string[] $skus
      * @return array<int, array<string, mixed>>
      */
-    public function fetchSnapshotRows(string $stream, string $storeCode, int $afterStateId, int $limit, array $skus = []): array
+    public function fetchSnapshotRows(string $stream, ?string $storeCode, int $afterStateId, int $limit, array $skus = []): array
     {
         $connection = $this->resourceConnection->getConnection();
         $select = $connection->select()
             ->from($this->getTable())
             ->where('stream_code = ?', $stream)
-            ->where('store_code = ?', $storeCode)
             ->where('state_id > ?', $afterStateId)
             ->order('state_id ASC')
             ->limit($limit);
+        if ($storeCode !== null) {
+            $select->where('store_code = ?', $storeCode);
+        }
         $skus = $this->normalizeSkus($skus);
         if ($skus !== []) {
             $select->where('sku IN (?)', $skus);
@@ -89,7 +91,7 @@ class StateSnapshot
      * @param string[] $skus
      * @return array<string, array<string, mixed>>
      */
-    public function fetchStateMapBySkus(string $stream, string $storeCode, array $skus): array
+    public function fetchStateMapBySkus(string $stream, ?string $storeCode, array $skus): array
     {
         $skus = $this->normalizeSkus($skus);
         if ($skus === []) {
@@ -99,13 +101,16 @@ class StateSnapshot
         $select = $connection->select()
             ->from($this->getTable())
             ->where('stream_code = ?', $stream)
-            ->where('store_code = ?', $storeCode)
             ->where('sku IN (?)', $skus);
+        if ($storeCode !== null) {
+            $select->where('store_code = ?', $storeCode);
+        }
         $rows = $connection->fetchAll($select);
         $result = [];
         foreach ($rows as $row) {
             $row['state'] = json_decode((string)$row['state_json'], true) ?: [];
             $result[(string)$row['sku']] = $row;
+            $result[(string)$row['sku'] . '@' . (string)$row['store_code']] = $row;
         }
         return $result;
     }
@@ -114,7 +119,7 @@ class StateSnapshot
      * @param string[] $skus
      * @return array<int, array<string, mixed>>
      */
-    public function fetchSnapshotRowsBySkus(string $stream, string $storeCode, array $skus, int $limit): array
+    public function fetchSnapshotRowsBySkus(string $stream, ?string $storeCode, array $skus, int $limit): array
     {
         $skus = $this->normalizeSkus($skus);
         if ($skus === []) {
@@ -125,10 +130,12 @@ class StateSnapshot
         $select = $connection->select()
             ->from($this->getTable())
             ->where('stream_code = ?', $stream)
-            ->where('store_code = ?', $storeCode)
             ->where('sku IN (?)', $skus)
             ->order('sku ASC')
             ->limit($limit);
+        if ($storeCode !== null) {
+            $select->where('store_code = ?', $storeCode);
+        }
 
         $rows = $connection->fetchAll($select);
         $rank = array_flip($skus);
@@ -143,12 +150,13 @@ class StateSnapshot
      * @param string[] $skus
      * @return array<string, array<string, mixed>>
      */
-    public function fetchStateRowsBySkus(string $stream, string $storeCode, array $skus): array
+    public function fetchStateRowsBySkus(string $stream, ?string $storeCode, array $skus): array
     {
         $rows = $this->fetchSnapshotRowsBySkus($stream, $storeCode, $skus, max(1, count($skus)));
         $result = [];
         foreach ($rows as $row) {
             $result[(string)$row['sku']] = $row;
+            $result[(string)$row['sku'] . '@' . (string)$row['store_code']] = $row;
         }
         return $result;
     }

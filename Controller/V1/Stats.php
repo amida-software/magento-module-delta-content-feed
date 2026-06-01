@@ -11,6 +11,7 @@ use Amida\ProductDeltaFeed\Model\Config;
 use Amida\ProductDeltaFeed\Model\Feed\ApiRequestGate;
 use Amida\ProductDeltaFeed\Model\Feed\HealthService;
 use Amida\ProductDeltaFeed\Model\Feed\ZstdCompressor;
+use Amida\ProductDeltaFeed\Model\Feed\OpenApiDocumentEncoder;
 use Amida\ProductDeltaFeed\Model\StoreScopeResolver;
 
 class Stats extends AbstractFeedAction
@@ -23,9 +24,10 @@ class Stats extends AbstractFeedAction
         StoreScopeResolver $storeScopeResolver,
         ZstdCompressor $compressor,
         ApiRequestGate $requestGate,
+        OpenApiDocumentEncoder $openApiDocumentEncoder,
         private readonly HealthService $healthService
     ) {
-        parent::__construct($context, $rawFactory, $jsonFactory, $config, $storeScopeResolver, $compressor, $requestGate);
+        parent::__construct($context, $rawFactory, $jsonFactory, $config, $storeScopeResolver, $compressor, $requestGate, $openApiDocumentEncoder);
     }
 
     public function execute(): ResultInterface
@@ -35,6 +37,12 @@ class Stats extends AbstractFeedAction
             return $this->invalidResponse(404, 'Not found');
         }
 
-        return $this->jsonResponse($this->healthService->getStats());
+        return $this->openApiDocumentResponse(
+            $this->healthService->getStats(),
+            'stats',
+            '/amidafeed/v1/stats/key/{key}',
+            '#/components/schemas/Stats',
+            true
+        );
     }
 }

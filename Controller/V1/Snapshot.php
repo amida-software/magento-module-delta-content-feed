@@ -12,6 +12,7 @@ use Amida\ProductDeltaFeed\Model\Feed\ApiRequestGate;
 use Amida\ProductDeltaFeed\Model\Feed\CategorySnapshotService;
 use Amida\ProductDeltaFeed\Model\Feed\SnapshotService;
 use Amida\ProductDeltaFeed\Model\Feed\ZstdCompressor;
+use Amida\ProductDeltaFeed\Model\Feed\OpenApiDocumentEncoder;
 use Amida\ProductDeltaFeed\Model\Store\AttributeDictionaryService;
 use Amida\ProductDeltaFeed\Model\StoreScopeResolver;
 
@@ -25,11 +26,12 @@ class Snapshot extends AbstractFeedAction
         StoreScopeResolver $storeScopeResolver,
         ZstdCompressor $compressor,
         ApiRequestGate $requestGate,
+        OpenApiDocumentEncoder $openApiDocumentEncoder,
         private readonly SnapshotService $snapshotService,
         private readonly CategorySnapshotService $categorySnapshotService,
         private readonly AttributeDictionaryService $attributeDictionaryService
     ) {
-        parent::__construct($context, $rawFactory, $jsonFactory, $config, $storeScopeResolver, $compressor, $requestGate);
+        parent::__construct($context, $rawFactory, $jsonFactory, $config, $storeScopeResolver, $compressor, $requestGate, $openApiDocumentEncoder);
     }
 
     public function execute(): ResultInterface
@@ -44,13 +46,14 @@ class Snapshot extends AbstractFeedAction
             return $this->invalidResponse(404, 'Unknown or disabled stream');
         }
 
-        $storeCode = $this->resolveStoreCode();
-        if ($storeCode === null) {
-            return $this->invalidResponse(400, 'Invalid store code');
+        $invalidStore = $this->invalidRequestedStoreResponse();
+        if ($invalidStore !== null) {
+            return $invalidStore;
         }
+        $storeCode = $this->resolveRequestedStoreCode();
 
         if ($stream === Config::STREAM_ATTRIBUTES) {
-            return $this->jsonResponse($this->attributeDictionaryService->build($storeCode, $this->parseCodes(), $this->parseLoadOptions(), $this->parseSchemaVersion(), $this->parseAll()));
+            return $this->openApiDocumentResponse($this->attributeDictionaryService->build($storeCode ?? $this->storeScopeResolver->getDefaultStoreCode(), $this->parseCodes(), $this->parseLoadOptions(), $this->parseSchemaVersion(), $this->parseAll()), 'attributes', '/amidafeed/v1/snapshot/key/{key}/stream/attributes', $this->parseSchemaVersion() === 1 ? '#/components/schemas/AttributesDictionaryV1' : '#/components/schemas/AttributesDictionaryV2', true);
         }
 
         $afterStateId = max(0, (int)$this->getRequest()->getParam('after_state_id', 0));
@@ -79,6 +82,8 @@ class Snapshot extends AbstractFeedAction
             'skus' => $this->parseStringList('skus', $body) ?: $this->parseStringList('sku', $body),
             'category_ids' => array_map('intval', $this->parseStringList('category_ids', $body) ?: $this->parseStringList('category_id', $body)),
             'include_offer' => (bool)(int)($body['include_offer'] ?? $this->getRequest()->getParam('include_offer', 0)),
+            'offer_parts' => $this->parseOfferParts($body),
+            'changes_highwater_event_id' => max(0, (int)($body['changes_highwater_event_id'] ?? $body['snapshot_highwater_event_id'] ?? $this->getRequest()->getParam('changes_highwater_event_id', $this->getRequest()->getParam('snapshot_highwater_event_id', 0)))),
             '_format_json' => $this->parseFormatJson($body),
         ];
     }
@@ -143,10 +148,23 @@ class Snapshot extends AbstractFeedAction
     }
 
     /** @param array<string, mixed> $body */
+    private function parseOfferParts(array $body): array
+    {
+        $value = $body['offer_parts'] ?? $body['offer_part'] ?? $this->getRequest()->getParam('offer_parts', $this->getRequest()->getParam('offer_part', ''));
+        $parts = is_array($value) ? $value : explode(',', (string)$value);
+        $allowed = ['price', 'availability'];
+        $parts = array_values(array_intersect($allowed, array_values(array_unique(array_filter(array_map(static fn (mixed $p): string => strtolower(trim((string)$p)), $parts))))));
+        return $parts;
+    }
+
+    /** @param array<string, mixed> $body */
     private function parseFormatJson(array $body): bool
     {
         $value = array_key_exists('format', $body) ? $body['format'] : $this->getRequest()->getParam('format', '');
-        return strtolower(trim((string)$value)) === 'json';
+        if (strtolower(trim((string)$value)) === 'json') {
+            return true;
+        }
+        return $this->responseFormat(false) === 'json';
     }
 
     /** @return array<string, mixed> */

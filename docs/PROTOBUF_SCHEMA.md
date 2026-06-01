@@ -1,3 +1,14 @@
+# Current production API note
+
+The current protobuf model has two transport families:
+
+1. Dedicated feed protobuf envelopes for `snapshot` and `changes`.
+2. `OpenApiDocument` generic wrapper for OpenAPI-document endpoints: `store`, `attributes`, `health`, `stats`.
+
+Public standalone `seo`, `price`, and `availability` streams are removed; SEO text is content, price/stock are offer.
+
+---
+
 # Protobuf Schema Notes
 
 The canonical schema is stored in `proto/amida_product_delta_feed_v1.proto`.
