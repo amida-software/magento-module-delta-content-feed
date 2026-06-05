@@ -64,6 +64,26 @@ class StateSnapshot
     }
 
     /**
+     * Delete state rows whose product no longer exists in the catalog. Used by the online-safe
+     * full rebuild (which upserts in place instead of truncating) to drop orphaned rows. Guarded
+     * against an empty id set so it can never wipe the whole table.
+     *
+     * @param int[] $productIds
+     */
+    public function deleteProductsNotIn(array $productIds): int
+    {
+        $productIds = array_values(array_unique(array_map('intval', $productIds)));
+        if ($productIds === []) {
+            return 0;
+        }
+
+        return (int)$this->resourceConnection->getConnection()->delete(
+            $this->getTable(),
+            ['entity_id NOT IN (?)' => $productIds]
+        );
+    }
+
+    /**
      * @param string[] $skus
      * @return array<int, array<string, mixed>>
      */

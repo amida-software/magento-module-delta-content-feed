@@ -92,6 +92,31 @@ class ProductStateBuilder
     }
 
     /**
+     * Release the product objects cached by the repository's identity map while looping over the
+     * whole catalog. getById() caches every product it loads (even with forceReload=true, which
+     * only bypasses the read, not the write), so without this the map grows unbounded and
+     * OOM-kills the process. The small memoised parent-curated payloads are deliberately kept:
+     * they stay valid for the run and avoid re-loading every configurable parent. Safe to call
+     * between products.
+     */
+    public function freeLoadedProducts(): void
+    {
+        if (method_exists($this->productRepository, 'cleanCache')) {
+            $this->productRepository->cleanCache();
+        }
+    }
+
+    /**
+     * Full per-run reset: drop both the loaded-product cache and the memoised parent-curated
+     * payloads. Called once a rebuild finishes so no state is carried into a later operation.
+     */
+    public function resetCaches(): void
+    {
+        $this->parentCuratedCache = [];
+        $this->freeLoadedProducts();
+    }
+
+    /**
      * Curated payload of the configurable parent of a child product, memoised per request.
      * Inheritable fields (category/images/description/etc.) do not depend on price/availability,
      * so the parent is built with an empty offer context.
