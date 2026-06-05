@@ -24,6 +24,7 @@ class CuratedParentInheritance
         'description',
         'short_description',
         'url_key',
+        'url',
         'brand',
         'product_type',
         'notes',

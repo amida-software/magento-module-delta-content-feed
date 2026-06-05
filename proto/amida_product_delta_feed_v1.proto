@@ -136,6 +136,7 @@ message CuratedProductState {
   repeated uint64 category_ids = 12;
   repeated string notes = 13;
   repeated RelatedProduct related_products = 14;
+  string url = 15;
 }
 
 message CuratedPriceState {

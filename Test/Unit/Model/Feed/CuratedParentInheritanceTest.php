@@ -24,6 +24,7 @@ class CuratedParentInheritanceTest extends TestCase
             'description' => '',                 // empty -> inherit
             'short_description' => 'own short',  // present -> keep
             'url_key' => null,                   // empty -> inherit
+            'url' => null,                       // empty -> inherit
             'images' => [],                      // empty -> inherit
             'category_ids' => [5],               // present -> keep
             'brand' => null,                     // empty -> inherit
@@ -40,6 +41,7 @@ class CuratedParentInheritanceTest extends TestCase
             'description' => 'Parent description',
             'short_description' => 'Parent short',
             'url_key' => 'parent-url',
+            'url' => 'https://shop/parent-url.html',
             'images' => ['http://example.com/img.jpg'],
             'category_ids' => [1, 2],
             'brand' => 'ParentBrand',
@@ -53,6 +55,7 @@ class CuratedParentInheritanceTest extends TestCase
         // inherited (child fields were empty)
         self::assertSame('Parent description', $result['description']);
         self::assertSame('parent-url', $result['url_key']);
+        self::assertSame('https://shop/parent-url.html', $result['url']);
         self::assertSame(['http://example.com/img.jpg'], $result['images']);
         self::assertSame('ParentBrand', $result['brand']);
         self::assertSame(['note1'], $result['notes']);

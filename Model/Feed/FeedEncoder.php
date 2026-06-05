@@ -353,6 +353,9 @@ class FeedEncoder
         foreach ((array)($state['related_products'] ?? []) as $relatedProduct) {
             $payload .= $this->writer->message(14, $this->encodeRelatedProduct((array)$relatedProduct));
         }
+        if (($state['url'] ?? '') !== '') {
+            $payload .= $this->writer->string(15, (string)$state['url']);
+        }
         return $payload;
     }
 

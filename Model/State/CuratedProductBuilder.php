@@ -5,6 +5,7 @@ namespace Amida\ProductDeltaFeed\Model\State;
 
 use Amida\ProductDeltaFeed\Model\State\Curated\CategoryProvider;
 use Amida\ProductDeltaFeed\Model\State\Curated\ImageUrlBuilder;
+use Amida\ProductDeltaFeed\Model\State\Curated\ProductUrlBuilder;
 use Amida\ProductDeltaFeed\Model\State\Curated\RelatedProductProvider;
 use Magento\Catalog\Model\Product;
 use Magento\Catalog\Model\Product\Attribute\Source\Status;
@@ -14,7 +15,8 @@ class CuratedProductBuilder
     public function __construct(
         private readonly CategoryProvider $categoryProvider,
         private readonly ImageUrlBuilder $imageUrlBuilder,
-        private readonly RelatedProductProvider $relatedProductProvider
+        private readonly RelatedProductProvider $relatedProductProvider,
+        private readonly ProductUrlBuilder $productUrlBuilder
     ) {
     }
 
@@ -40,6 +42,7 @@ class CuratedProductBuilder
                 'description' => $this->stripHtmlOrNull($product->getData('description')),
                 'short_description' => $this->stripHtmlOrNull($product->getData('short_description')),
                 'url_key' => $this->stringOrNull($product->getData('url_key')),
+                'url' => $this->productUrlBuilder->getProductUrl($product, $storeCode),
                 'images' => $this->imageUrlBuilder->getImageUrls($product, $storeCode),
                 'brand' => $this->firstLabel($this->safeAttributeText($product, 'manufacturer')) ?? $this->stringOrNull($product->getData('manufacturer')),
                 'product_type' => $this->resolveProductType($categories),

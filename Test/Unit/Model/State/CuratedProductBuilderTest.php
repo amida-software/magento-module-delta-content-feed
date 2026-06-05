@@ -5,6 +5,7 @@ namespace Amida\ProductDeltaFeed\Test\Unit\Model\State;
 
 use Amida\ProductDeltaFeed\Model\State\Curated\CategoryProvider;
 use Amida\ProductDeltaFeed\Model\State\Curated\ImageUrlBuilder;
+use Amida\ProductDeltaFeed\Model\State\Curated\ProductUrlBuilder;
 use Amida\ProductDeltaFeed\Model\State\Curated\RelatedProductProvider;
 use Amida\ProductDeltaFeed\Model\State\CuratedProductBuilder;
 use Magento\Catalog\Model\Product;
@@ -68,7 +69,13 @@ class CuratedProductBuilderTest extends TestCase
                 'sku' => 'REL-11',
             ]]);
 
-        $builder = new CuratedProductBuilder($categoryProvider, $imageUrlBuilder, $relatedProductProvider);
+        $productUrlBuilder = $this->createMock(ProductUrlBuilder::class);
+        $productUrlBuilder->expects(self::once())
+            ->method('getProductUrl')
+            ->with($product, 'ua')
+            ->willReturn('https://shop/idole.html');
+
+        $builder = new CuratedProductBuilder($categoryProvider, $imageUrlBuilder, $relatedProductProvider, $productUrlBuilder);
         $payload = $builder->build($product, 'ua', [
             'offer' => [
                 'prices' => [
@@ -103,6 +110,7 @@ class CuratedProductBuilderTest extends TestCase
                 'description' => 'Long perfume description',
                 'short_description' => 'Short perfume description',
                 'url_key' => 'idole',
+                'url' => 'https://shop/idole.html',
                 'images' => [
                     'https://www.jan.com.ua/media/catalog/product/i/d/idole.jpg',
                 ],
@@ -142,8 +150,9 @@ class CuratedProductBuilderTest extends TestCase
         $imageUrlBuilder->method('getImageUrls')->willReturn([]);
         $relatedProductProvider = $this->createMock(RelatedProductProvider::class);
         $relatedProductProvider->method('getRelatedProducts')->willReturn([]);
+        $productUrlBuilder = $this->createMock(ProductUrlBuilder::class);
 
-        $builder = new CuratedProductBuilder($categoryProvider, $imageUrlBuilder, $relatedProductProvider);
+        $builder = new CuratedProductBuilder($categoryProvider, $imageUrlBuilder, $relatedProductProvider, $productUrlBuilder);
         $payload = $builder->build($product, 'ua', []);
 
         self::assertSame('Long perfume description', $payload['curated']['description']);
@@ -172,8 +181,9 @@ class CuratedProductBuilderTest extends TestCase
         $imageUrlBuilder->method('getImageUrls')->willReturn([]);
         $relatedProductProvider = $this->createMock(RelatedProductProvider::class);
         $relatedProductProvider->method('getRelatedProducts')->willReturn([]);
+        $productUrlBuilder = $this->createMock(ProductUrlBuilder::class);
 
-        $builder = new CuratedProductBuilder($categoryProvider, $imageUrlBuilder, $relatedProductProvider);
+        $builder = new CuratedProductBuilder($categoryProvider, $imageUrlBuilder, $relatedProductProvider, $productUrlBuilder);
         $payload = $builder->build($product, 'ua', []);
 
         self::assertSame(['amber', 'cumin', 'sandal'], $payload['curated']['notes']);
