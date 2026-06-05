@@ -41,9 +41,20 @@ class SnapshotRebuilder
                     if (!$this->config->isStreamEnabled($stream)) {
                         continue;
                     }
+                    if ($stream === 'curated' && ($states['meta']['curated_excluded'] ?? false)) {
+                        // Configurable products are excluded from the curated stream entirely
+                        // (whether enabled or disabled), matching ChangeProcessor's curated_excluded
+                        // handling. Without this, disabled configurables hit emptyPayload('curated')
+                        // (non-null) and a curated row would be written for them.
+                        continue;
+                    }
                     $payload = (bool)$states['meta']['enabled']
                         ? $states[$stream]
                         : $this->emptyPayload($stream);
+                    if ($payload === null) {
+                        // Defensive: never hash(null) or write a null state row.
+                        continue;
+                    }
                     $rows[] = [
                         'entity_id' => $productId,
                         'sku' => (string)$states['meta']['sku'],
